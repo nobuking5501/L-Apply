@@ -71,3 +71,6 @@ steps:
           --set-env-vars ORGANIZATION_ID=org_MMWWMU8RmzWKdvXctUCwKTZfD453,LIFF_ID=2008405494-nKEy7Pl0
 
 timeout: 1600s
+
+options:
+  logging: CLOUD_LOGGING_ONLY
