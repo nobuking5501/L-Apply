@@ -34,6 +34,7 @@ export interface Reminder {
   sentAt: Timestamp | null;
   canceled: boolean;
   message: string;
+  organizationId?: string;
 }
 
 export interface StepDelivery {

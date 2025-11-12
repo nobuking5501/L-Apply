@@ -2,6 +2,7 @@ import { onSchedule } from 'firebase-functions/v2/scheduler';
 import { Timestamp } from 'firebase-admin/firestore';
 import { pushMessageWithRetry, createTextMessage } from './utils/line';
 import { ensureFirebaseInitialized } from './utils/firebase-init';
+import { getOrganizationConfig } from './config';
 import * as firestore from './utils/firestore';
 import * as timezone from './utils/timezone';
 
@@ -37,8 +38,20 @@ export const remind = onSchedule(
             continue;
           }
 
+          // Get organization config if organizationId is present
+          let accessToken: string | undefined = undefined;
+          if (reminder.organizationId) {
+            try {
+              const orgConfig = await getOrganizationConfig(reminder.organizationId);
+              accessToken = orgConfig.line.channelAccessToken;
+            } catch (error) {
+              console.error(`Failed to get organization config for ${reminder.organizationId}:`, error);
+              // Fall back to default config
+            }
+          }
+
           // Send reminder
-          await pushMessageWithRetry(reminder.userId, [createTextMessage(reminder.message)], undefined, 3);
+          await pushMessageWithRetry(reminder.userId, [createTextMessage(reminder.message)], accessToken, 3);
 
           // Mark as sent
           await firestore.markReminderAsSent(reminder.id!);

@@ -1,6 +1,7 @@
 import { onSchedule } from 'firebase-functions/v2/scheduler';
 import { pushMessageWithRetry, createTextMessage } from './utils/line';
 import { ensureFirebaseInitialized } from './utils/firebase-init';
+import { getOrganizationConfig } from './config';
 import * as stepDelivery from './utils/step-delivery';
 import * as firestore from './utils/firestore';
 
@@ -43,11 +44,23 @@ export const deliverSteps = onSchedule(
             continue;
           }
 
+          // Get organization config if organizationId is present
+          let accessToken: string | undefined = undefined;
+          if (delivery.organizationId) {
+            try {
+              const orgConfig = await getOrganizationConfig(delivery.organizationId);
+              accessToken = orgConfig.line.channelAccessToken;
+            } catch (error) {
+              console.error(`Failed to get organization config for ${delivery.organizationId}:`, error);
+              // Fall back to default config
+            }
+          }
+
           // Send step delivery message
           await pushMessageWithRetry(
             delivery.userId,
             [createTextMessage(delivery.message)],
-            undefined, // Use default access token (legacy mode)
+            accessToken,
             3 // Retry up to 3 times
           );
 

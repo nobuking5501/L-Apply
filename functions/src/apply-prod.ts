@@ -115,6 +115,7 @@ export const apply = onRequest(
           sentAt: null,
           canceled: false,
           message: messages.generateT24hReminderMessage(body.plan, slotAt),
+          organizationId: orgConfig.organizationId,
         });
 
         // Day-of reminder (8 AM)
@@ -126,6 +127,7 @@ export const apply = onRequest(
           sentAt: null,
           canceled: false,
           message: messages.generateDayOfReminderMessage(body.plan, slotAt),
+          organizationId: orgConfig.organizationId,
         });
       }
 
