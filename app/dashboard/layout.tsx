@@ -16,10 +16,12 @@ import {
   LogOut,
   ChevronDown,
   MessageSquare,
+  Calendar,
 } from 'lucide-react';
 
 const navigation = [
   { name: 'ホーム', href: '/dashboard', icon: LayoutDashboard },
+  { name: 'イベント管理', href: '/dashboard/events', icon: Calendar },
   { name: 'ステップ配信監視', href: '/dashboard/step-delivery', icon: Send },
   { name: 'ステップ配信設定', href: '/dashboard/step-messages', icon: MessageSquare },
   { name: '自動返信設定', href: '/dashboard/auto-replies', icon: MessageSquare },
