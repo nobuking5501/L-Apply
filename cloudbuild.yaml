@@ -1,0 +1,73 @@
+steps:
+  # Install dependencies for functions
+  - name: 'node:20'
+    entrypoint: npm
+    args: ['install']
+    dir: 'functions'
+
+  # Build functions
+  - name: 'node:20'
+    entrypoint: npm
+    args: ['run', 'build']
+    dir: 'functions'
+
+  # Deploy Cloud Functions
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: bash
+    args:
+      - '-c'
+      - |
+        gcloud functions deploy webhook \
+          --gen2 \
+          --runtime=nodejs20 \
+          --region=asia-northeast1 \
+          --source=./functions \
+          --entry-point=webhook \
+          --trigger-http \
+          --allow-unauthenticated \
+          --set-env-vars ORGANIZATION_ID=org_MMWWMU8RmzWKdvXctUCwKTZfD453,LIFF_ID=2008405494-nKEy7Pl0
+
+  # Deploy other functions
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: bash
+    args:
+      - '-c'
+      - |
+        gcloud functions deploy apply \
+          --gen2 \
+          --runtime=nodejs20 \
+          --region=asia-northeast1 \
+          --source=./functions \
+          --entry-point=apply \
+          --trigger-http \
+          --allow-unauthenticated
+
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: bash
+    args:
+      - '-c'
+      - |
+        gcloud functions deploy remind \
+          --gen2 \
+          --runtime=nodejs20 \
+          --region=asia-northeast1 \
+          --source=./functions \
+          --entry-point=remind \
+          --trigger-topic=firebase-schedule-remind-asia-northeast1 \
+          --set-env-vars ORGANIZATION_ID=org_MMWWMU8RmzWKdvXctUCwKTZfD453,LIFF_ID=2008405494-nKEy7Pl0
+
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: bash
+    args:
+      - '-c'
+      - |
+        gcloud functions deploy deliverSteps \
+          --gen2 \
+          --runtime=nodejs20 \
+          --region=asia-northeast1 \
+          --source=./functions \
+          --entry-point=deliverSteps \
+          --trigger-topic=firebase-schedule-deliverSteps-asia-northeast1 \
+          --set-env-vars ORGANIZATION_ID=org_MMWWMU8RmzWKdvXctUCwKTZfD453,LIFF_ID=2008405494-nKEy7Pl0
+
+timeout: 1600s
