@@ -28,7 +28,7 @@ steps:
 
         # Deploy functions (Cloud Build is already authenticated)
         cd /workspace
-        firebase deploy --only functions --project l-apply --non-interactive
+        firebase deploy --only functions --project l-apply --non-interactive --force
     env:
       - 'ORGANIZATION_ID=org_MMWWMU8RmzWKdvXctUCwKTZfD453'
       - 'LIFF_ID=2008405494-nKEy7Pl0'
