@@ -1,4 +1,5 @@
 import { getFirestore, Timestamp } from 'firebase-admin/firestore';
+import { ensureFirebaseInitialized } from './firebase-init';
 import { LineUser, Application, Reminder } from '../types';
 
 // Collections
@@ -12,6 +13,7 @@ let dbInstance: FirebaseFirestore.Firestore | null = null;
 
 export function getDb(): FirebaseFirestore.Firestore {
   if (!dbInstance) {
+    ensureFirebaseInitialized();
     dbInstance = getFirestore();
   }
   return dbInstance;

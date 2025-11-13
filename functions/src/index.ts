@@ -1,7 +1,5 @@
-// Firebase Admin is initialized lazily in each function
-// to avoid timeout during deployment analysis
-
 // Import and re-export functions
+// Note: Firebase Admin is initialized lazily in each function via ensureFirebaseInitialized()
 import { apply as applyFn } from './apply-prod';
 import { webhook as webhookFn } from './webhook-prod';
 import { remind as remindFn } from './remind-prod';
