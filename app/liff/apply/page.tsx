@@ -2,10 +2,28 @@
 
 import { useEffect, useState } from 'react';
 import liff from '@line/liff';
+import { collection, query, where, getDocs, limit } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
 import styles from './apply.module.css';
 
 const LIFF_ID = process.env.NEXT_PUBLIC_LIFF_ID || '';
 const APPLY_API_URL = process.env.NEXT_PUBLIC_APPLY_API_URL || '';
+
+interface EventSlot {
+  id: string;
+  date: string;
+  time: string;
+  maxCapacity: number;
+  currentCapacity: number;
+}
+
+interface ActiveEvent {
+  id: string;
+  title: string;
+  description: string;
+  location: string;
+  slots: EventSlot[];
+}
 
 interface FormData {
   plan: string;
@@ -19,6 +37,9 @@ export default function ApplyPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+  const [activeEvent, setActiveEvent] = useState<ActiveEvent | null>(null);
+  const [loadingEvent, setLoadingEvent] = useState(true);
+  const [selectedSlot, setSelectedSlot] = useState<string>('');
 
   const [formData, setFormData] = useState<FormData>({
     plan: '',
@@ -27,6 +48,61 @@ export default function ApplyPage() {
     consent: true,
   });
 
+  // Fetch active event
+  useEffect(() => {
+    const fetchActiveEvent = async () => {
+      try {
+        // Get organization ID from LIFF ID
+        const orgsQuery = query(
+          collection(db, 'organizations'),
+          where('liffId', '==', LIFF_ID),
+          limit(1)
+        );
+        const orgsSnapshot = await getDocs(orgsQuery);
+
+        if (orgsSnapshot.empty) {
+          setError('組織情報が見つかりません');
+          setLoadingEvent(false);
+          return;
+        }
+
+        const organizationId = orgsSnapshot.docs[0].id;
+
+        // Get active event for this organization
+        const eventsQuery = query(
+          collection(db, 'events'),
+          where('organizationId', '==', organizationId),
+          where('isActive', '==', true),
+          limit(1)
+        );
+        const eventsSnapshot = await getDocs(eventsQuery);
+
+        if (eventsSnapshot.empty) {
+          setError('現在公開中のイベントがありません');
+          setLoadingEvent(false);
+          return;
+        }
+
+        const eventData = eventsSnapshot.docs[0].data();
+        setActiveEvent({
+          id: eventsSnapshot.docs[0].id,
+          title: eventData.title,
+          description: eventData.description,
+          location: eventData.location,
+          slots: eventData.slots || [],
+        });
+      } catch (err) {
+        console.error('Error fetching active event:', err);
+        setError('イベント情報の取得に失敗しました');
+      } finally {
+        setLoadingEvent(false);
+      }
+    };
+
+    fetchActiveEvent();
+  }, []);
+
+  // Initialize LIFF
   useEffect(() => {
     const initLiff = async () => {
       try {
@@ -53,6 +129,14 @@ export default function ApplyPage() {
     setError(null);
 
     try {
+      if (!activeEvent) {
+        throw new Error('イベント情報がありません');
+      }
+
+      if (!selectedSlot) {
+        throw new Error('日時を選択してください');
+      }
+
       if (!liff.isLoggedIn()) {
         throw new Error('Not logged in');
       }
@@ -62,9 +146,14 @@ export default function ApplyPage() {
         throw new Error('Failed to get ID token');
       }
 
-      // Fixed values for this seminar
-      const seminarPlan = 'AI×コピペアプリ開発無料体験セミナー';
-      const seminarDate = '2025-11-15T21:00:00+09:00'; // Japan Standard Time (JST)
+      // Find selected slot
+      const slot = activeEvent.slots.find(s => s.id === selectedSlot);
+      if (!slot) {
+        throw new Error('選択された日時が見つかりません');
+      }
+
+      // Convert date and time to ISO format
+      const slotDateTime = `${slot.date}T${slot.time}:00+09:00`;
 
       // Call apply API
       const response = await fetch(APPLY_API_URL, {
@@ -74,9 +163,9 @@ export default function ApplyPage() {
         },
         body: JSON.stringify({
           idToken,
-          liffId: LIFF_ID, // Added for multi-tenant support
-          plan: seminarPlan,
-          slotAt: seminarDate,
+          liffId: LIFF_ID,
+          plan: activeEvent.title,
+          slotAt: slotDateTime,
           notes: formData.notes,
           consent: formData.consent,
         }),
@@ -101,10 +190,18 @@ export default function ApplyPage() {
     }
   };
 
-  if (!isLiffReady) {
+  if (loadingEvent || !isLiffReady) {
     return (
       <div className={styles.container}>
         <div className={styles.loading}>読み込み中...</div>
+      </div>
+    );
+  }
+
+  if (error && !activeEvent) {
+    return (
+      <div className={styles.container}>
+        <div className={styles.error}>{error}</div>
       </div>
     );
   }
@@ -121,33 +218,59 @@ export default function ApplyPage() {
     );
   }
 
+  if (!activeEvent) {
+    return (
+      <div className={styles.container}>
+        <div className={styles.error}>イベント情報が見つかりません</div>
+      </div>
+    );
+  }
+
   return (
     <div className={styles.container}>
-      <h1 className={styles.title}>AI×コピペアプリ開発<br/>無料体験セミナー 申込</h1>
+      <h1 className={styles.title}>{activeEvent.title}</h1>
 
       <div className={styles.seminarInfo}>
-        <h2>セミナー情報</h2>
-        <p><strong>📅 日時：</strong>2025年11月15日（土）21:00～22:30</p>
-        <p><strong>💻 参加方法：</strong>オンライン（Zoom）</p>
-        <p><strong>💰 参加費：</strong>無料</p>
-        <div className={styles.zoomInfo}>
-          <p><strong>Zoom情報：</strong></p>
-          <p>ミーティングID: 871 2107 4742</p>
-          <p>パスコード: 300798</p>
-          <a
-            href="https://us06web.zoom.us/j/87121074742?pwd=fkDi1VODGlqbs7jmseQFoI7FXhqqdd.1"
-            target="_blank"
-            rel="noopener noreferrer"
-            className={styles.zoomLink}
-          >
-            Zoomリンクを開く
-          </a>
-        </div>
+        <h2>イベント情報</h2>
+        <p className={styles.description}>{activeEvent.description}</p>
+        <p><strong>📍 開催場所：</strong>{activeEvent.location}</p>
+        <p><strong>📅 開催日時：</strong></p>
+        <ul className={styles.slotsList}>
+          {activeEvent.slots.map((slot) => (
+            <li key={slot.id}>
+              {slot.date} {slot.time}
+              {slot.currentCapacity >= slot.maxCapacity && <span className={styles.full}> (満席)</span>}
+            </li>
+          ))}
+        </ul>
       </div>
 
       {error && <div className={styles.error}>{error}</div>}
 
       <form onSubmit={handleSubmit} className={styles.form}>
+        <div className={styles.formGroup}>
+          <label htmlFor="slot" className={styles.label}>
+            参加希望日時 <span className={styles.required}>*</span>
+          </label>
+          <select
+            id="slot"
+            value={selectedSlot}
+            onChange={(e) => setSelectedSlot(e.target.value)}
+            className={styles.select}
+            required
+          >
+            <option value="">選択してください</option>
+            {activeEvent.slots.map((slot) => {
+              const isFull = slot.currentCapacity >= slot.maxCapacity;
+              return (
+                <option key={slot.id} value={slot.id} disabled={isFull}>
+                  {slot.date} {slot.time} {isFull ? '(満席)' : `(残り${slot.maxCapacity - slot.currentCapacity}席)`}
+                </option>
+              );
+            })}
+          </select>
+        </div>
+
         <div className={styles.formGroup}>
           <label htmlFor="notes" className={styles.label}>
             参加動機・ご質問など（任意）
@@ -158,7 +281,7 @@ export default function ApplyPage() {
             onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
             className={styles.textarea}
             rows={4}
-            placeholder="セミナーに期待することや、質問があればご記入ください"
+            placeholder="イベントに期待することや、質問があればご記入ください"
           />
         </div>
 
@@ -174,8 +297,8 @@ export default function ApplyPage() {
           </label>
         </div>
 
-        <button type="submit" disabled={isSubmitting} className={styles.submitButton}>
-          {isSubmitting ? '送信中...' : 'セミナーに申込む'}
+        <button type="submit" disabled={isSubmitting || !selectedSlot} className={styles.submitButton}>
+          {isSubmitting ? '送信中...' : 'イベントに申込む'}
         </button>
       </form>
     </div>

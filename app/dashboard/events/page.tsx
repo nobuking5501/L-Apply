@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { collection, query, where, getDocs, addDoc, updateDoc, deleteDoc, doc, Timestamp } from 'firebase/firestore';
+import { collection, query, where, getDocs, addDoc, updateDoc, deleteDoc, doc, Timestamp, writeBatch } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { useAuth } from '@/contexts/AuthContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -67,6 +67,24 @@ export default function EventsPage() {
         id: `slot-${Date.now()}-${index}`,
       }));
 
+      // If setting this event as active, deactivate all other active events
+      if (formData.isActive) {
+        const activeEventsQuery = query(
+          collection(db, 'events'),
+          where('organizationId', '==', userData.organizationId),
+          where('isActive', '==', true)
+        );
+        const activeEventsSnapshot = await getDocs(activeEventsQuery);
+
+        if (!activeEventsSnapshot.empty) {
+          const batch = writeBatch(db);
+          activeEventsSnapshot.docs.forEach((eventDoc) => {
+            batch.update(eventDoc.ref, { isActive: false });
+          });
+          await batch.commit();
+        }
+      }
+
       await addDoc(collection(db, 'events'), {
         ...formData,
         slots: slotsWithIds,
@@ -114,6 +132,27 @@ export default function EventsPage() {
     if (!editingEvent || !userData?.organizationId) return;
 
     try {
+      // If setting this event as active, deactivate all other active events
+      if (formData.isActive) {
+        const activeEventsQuery = query(
+          collection(db, 'events'),
+          where('organizationId', '==', userData.organizationId),
+          where('isActive', '==', true)
+        );
+        const activeEventsSnapshot = await getDocs(activeEventsQuery);
+
+        if (!activeEventsSnapshot.empty) {
+          const batch = writeBatch(db);
+          activeEventsSnapshot.docs.forEach((eventDoc) => {
+            // Don't deactivate the event being updated
+            if (eventDoc.id !== editingEvent.id) {
+              batch.update(eventDoc.ref, { isActive: false });
+            }
+          });
+          await batch.commit();
+        }
+      }
+
       await updateDoc(doc(db, 'events', editingEvent.id), {
         ...formData,
         updatedAt: Timestamp.now(),
