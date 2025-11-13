@@ -77,6 +77,17 @@ export default function EventsPage() {
         const activeEventsSnapshot = await getDocs(activeEventsQuery);
 
         if (!activeEventsSnapshot.empty) {
+          // Show warning about existing active events
+          const activeEventTitles = activeEventsSnapshot.docs
+            .map((doc) => doc.data().title)
+            .join('、');
+
+          const confirmMessage = `現在「${activeEventTitles}」が公開中です。\n\nこのイベントを公開すると、既存の公開イベントは自動的に非公開になります。\n\n続行しますか？`;
+
+          if (!confirm(confirmMessage)) {
+            return; // User cancelled
+          }
+
           const batch = writeBatch(db);
           activeEventsSnapshot.docs.forEach((eventDoc) => {
             batch.update(eventDoc.ref, { isActive: false });
@@ -141,13 +152,26 @@ export default function EventsPage() {
         );
         const activeEventsSnapshot = await getDocs(activeEventsQuery);
 
-        if (!activeEventsSnapshot.empty) {
+        // Filter out the event being updated
+        const otherActiveEvents = activeEventsSnapshot.docs.filter(
+          (doc) => doc.id !== editingEvent.id
+        );
+
+        if (otherActiveEvents.length > 0) {
+          // Show warning about existing active events
+          const activeEventTitles = otherActiveEvents
+            .map((doc) => doc.data().title)
+            .join('、');
+
+          const confirmMessage = `現在「${activeEventTitles}」が公開中です。\n\nこのイベントを公開すると、既存の公開イベントは自動的に非公開になります。\n\n続行しますか？`;
+
+          if (!confirm(confirmMessage)) {
+            return; // User cancelled
+          }
+
           const batch = writeBatch(db);
-          activeEventsSnapshot.docs.forEach((eventDoc) => {
-            // Don't deactivate the event being updated
-            if (eventDoc.id !== editingEvent.id) {
-              batch.update(eventDoc.ref, { isActive: false });
-            }
+          otherActiveEvents.forEach((eventDoc) => {
+            batch.update(eventDoc.ref, { isActive: false });
           });
           await batch.commit();
         }
