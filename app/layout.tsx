@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import './globals.css';
-import { AuthProvider } from '@/contexts/AuthContext';
+import { Providers } from './providers';
 
 export const metadata: Metadata = {
   title: 'L-Apply - 申込システム',
@@ -15,7 +15,7 @@ export default function RootLayout({
   return (
     <html lang="ja">
       <body>
-        <AuthProvider>{children}</AuthProvider>
+        <Providers>{children}</Providers>
       </body>
     </html>
   );
