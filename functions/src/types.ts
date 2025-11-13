@@ -10,6 +10,7 @@ export interface LineUser {
   userId: string;
   displayName: string;
   consent: boolean;
+  organizationId: string;
   createdAt: Timestamp;
   updatedAt: Timestamp;
 }

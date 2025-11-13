@@ -46,6 +46,250 @@ export default function StepMessagesPage() {
   };
 
   const [formData, setFormData] = useState(emptyTemplate);
+  const [selectedTemplate, setSelectedTemplate] = useState<string>('');
+
+  // メッセージテンプレート
+  const messageTemplates = {
+    welcome: [
+      {
+        id: 'welcome-1',
+        name: '基本的な挨拶',
+        message: `友だち追加ありがとうございます！🎉
+
+L-Applyへようこそ！
+
+このアカウントでは、イベントの申込や最新情報をお届けします。
+
+【利用できる機能】
+📅 イベント申込
+📬 リマインダー通知
+💡 お役立ち情報配信
+
+何かご不明な点がございましたら、お気軽にメッセージをお送りください。
+
+今後ともよろしくお願いいたします！`,
+      },
+      {
+        id: 'welcome-2',
+        name: 'カジュアルな挨拶',
+        message: `友だち追加ありがとうございます！😊
+
+はじめまして、L-Applyです！
+
+このアカウントでは：
+✨ イベント情報のお知らせ
+✨ 簡単申込
+✨ リマインダー通知
+
+などを提供しています。
+
+気になるイベントがあれば、お気軽にお申し込みください！
+質問もいつでもどうぞ！`,
+      },
+      {
+        id: 'welcome-3',
+        name: 'シンプルな挨拶',
+        message: `ご登録ありがとうございます！
+
+L-Applyでは、イベントの申込や最新情報をお届けします。
+
+リッチメニューから各種機能をご利用いただけます。
+
+ご質問がございましたら、お気軽にメッセージをお送りください。`,
+      },
+    ],
+    completion: [
+      {
+        id: 'completion-1',
+        name: '基本的な申込完了（Zoom）',
+        message: `✅ お申し込みありがとうございます！
+
+【イベント情報】
+{plan}
+📅 {datetime}
+
+【参加方法】
+以下のZoomリンクからご参加ください。
+
+🔗 Zoomリンク
+https://zoom.us/j/YOUR_MEETING_ID
+
+※前日と当日にリマインダーをお送りします。
+
+ご不明点はこのトークに返信してください。`,
+      },
+      {
+        id: 'completion-2',
+        name: '申込完了（オンライン汎用）',
+        message: `✅ 申込が完了しました！
+
+【イベント詳細】
+{plan}
+📅 {datetime}
+
+参加方法の詳細は、開催日が近づきましたらお知らせいたします。
+
+※リマインダーを設定しましたので、忘れずにご参加いただけます。
+
+楽しみにお待ちください！`,
+      },
+      {
+        id: 'completion-3',
+        name: '申込完了（会場）',
+        message: `✅ お申し込みありがとうございます！
+
+【イベント情報】
+{plan}
+📅 {datetime}
+
+【会場】
+〒xxx-xxxx
+東京都xxx区xxx
+最寄駅：xxx駅 徒歩x分
+
+※前日と当日にリマインダーをお送りします。
+
+当日お会いできることを楽しみにしております！`,
+      },
+    ],
+    'after-seminar': [
+      {
+        id: 'after-1',
+        name: '個別相談案内（翌日）',
+        message: `イベントへのご参加ありがとうございました！🎉
+
+いかがでしたか？
+AI×コピペでアプリ開発の可能性を感じていただけましたでしょうか。
+
+【個別相談のご案内】
+もっと詳しく知りたい方向けに、無料の個別相談を実施しています💡
+
+✨ 個別相談でできること
+・あなたのアイデアを具体化
+・最適な開発手順をご提案
+・疑問点を直接解消
+
+ご希望の方は「個別相談希望」と返信してください📩`,
+      },
+      {
+        id: 'after-2',
+        name: '個別相談案内（3日後）',
+        message: `こんにちは！
+イベントから少し時間が経ちましたが、アプリ開発は進んでいますか？😊
+
+【無料個別相談、まだ受付中です】
+
+「何から始めればいいかわからない...」
+「自分のアイデアは実現できる？」
+「もっと詳しく聞きたい！」
+
+そんなお悩みを個別相談で解決しませんか？
+
+📅 所要時間：30分程度
+💰 料金：完全無料
+💻 形式：オンライン（Zoom）
+
+ご希望の方は「個別相談希望」と返信してください！`,
+      },
+      {
+        id: 'after-3',
+        name: '個別相談案内（最終）',
+        message: `イベントからもうすぐ1週間ですね📆
+
+【個別相談ラストチャンス！】
+
+この機会を逃すと、次回のご案内は未定です。
+
+実際に多くの方が個別相談を経て、
+自分のアイデアをアプリとして形にしています✨
+
+「ちょっと話を聞いてみたい」
+だけでも大歓迎です！
+
+今ならまだ枠が空いています。
+「個別相談希望」と返信してお気軽にお申し込みください。
+
+※この案内が最後となります`,
+      },
+      {
+        id: 'after-4',
+        name: 'アンケート依頼',
+        message: `イベントへのご参加ありがとうございました！
+
+よろしければ、簡単なアンケートにご協力いただけますでしょうか？📝
+
+今後のイベント改善のため、皆様の率直なご意見をお聞かせください。
+
+🔗 アンケートはこちら
+[アンケートURL]
+
+所要時間：約3分
+
+ご協力いただいた方には、次回イベントで使える特典をご用意しています🎁`,
+      },
+      {
+        id: 'after-5',
+        name: 'お礼メッセージ',
+        message: `イベントへのご参加、誠にありがとうございました！
+
+今回のイベントが、皆様の今後の活動に少しでもお役に立てれば幸いです。
+
+また次回のイベントでお会いできることを楽しみにしております。
+
+引き続き、どうぞよろしくお願いいたします！`,
+      },
+    ],
+    general: [
+      {
+        id: 'general-1',
+        name: '次回イベント案内',
+        message: `こんにちは！
+
+【新しいイベントのお知らせ】📢
+
+次回のイベントが決定しました！
+
+📅 日時：[日時]
+📍 場所：[場所/オンライン]
+💡 内容：[内容説明]
+
+詳細・お申し込みは以下から
+🔗 [申込URL]
+
+皆様のご参加をお待ちしております！`,
+      },
+      {
+        id: 'general-2',
+        name: 'お役立ち情報',
+        message: `こんにちは！
+
+今日は[トピック]についての情報をお届けします💡
+
+【[トピック]のポイント】
+✅ ポイント1
+✅ ポイント2
+✅ ポイント3
+
+詳しくはこちらの記事をご覧ください👇
+🔗 [記事URL]
+
+何かご質問があれば、お気軽にメッセージをお送りください！`,
+      },
+      {
+        id: 'general-3',
+        name: '定期的なリマインド',
+        message: `こんにちは！
+
+最近、イベントに参加されていますか？😊
+
+私たちは定期的に様々なイベントを開催しています。
+
+気になるイベントがあれば、ぜひお気軽にお申し込みください！
+
+リッチメニューから最新のイベント情報をご確認いただけます。`,
+      },
+    ],
+  };
 
   // デフォルトのステップメッセージ
   const defaultMessages = [
@@ -57,10 +301,10 @@ export default function StepMessagesPage() {
 
 L-Applyへようこそ！
 
-このアカウントでは、セミナーの申込や最新情報をお届けします。
+このアカウントでは、イベントの申込や最新情報をお届けします。
 
 【利用できる機能】
-📅 セミナー申込
+📅 イベント申込
 📬 リマインダー通知
 💡 お役立ち情報配信
 
@@ -75,7 +319,7 @@ L-Applyへようこそ！
       messageType: 'completion' as const,
       message: `✅ お申し込みありがとうございます！
 
-【セミナー情報】
+【イベント情報】
 {plan}
 📅 {datetime}
 
@@ -97,7 +341,7 @@ https://us06web.zoom.us/j/87121074742?pwd=fkDi1VODGlqbs7jmseQFoI7FXhqqdd.1
       stepNumber: 1,
       delayDays: 1,
       messageType: 'after-seminar' as const,
-      message: `セミナーへのご参加ありがとうございました！🎉
+      message: `イベントへのご参加ありがとうございました！🎉
 
 いかがでしたか？
 AI×コピペでアプリ開発の可能性を感じていただけましたでしょうか。
@@ -118,7 +362,7 @@ AI×コピペでアプリ開発の可能性を感じていただけましたで�
       delayDays: 3,
       messageType: 'after-seminar' as const,
       message: `こんにちは！
-セミナーから少し時間が経ちましたが、アプリ開発は進んでいますか？😊
+イベントから少し時間が経ちましたが、アプリ開発は進んでいますか？😊
 
 【無料個別相談、まだ受付中です】
 
@@ -139,7 +383,7 @@ AI×コピペでアプリ開発の可能性を感じていただけましたで�
       stepNumber: 3,
       delayDays: 7,
       messageType: 'after-seminar' as const,
-      message: `セミナーからもうすぐ1週間ですね📆
+      message: `イベントからもうすぐ1週間ですね📆
 
 【個別相談ラストチャンス！】
 
@@ -236,7 +480,23 @@ AI×コピペでアプリ開発の可能性を感じていただけましたで�
         messageType: messageType || 'after-seminar',
       });
     }
+    setSelectedTemplate('');
     setDialogOpen(true);
+  };
+
+  const handleTemplateSelect = (templateId: string) => {
+    setSelectedTemplate(templateId);
+
+    // 現在のメッセージタイプに対応するテンプレートを検索
+    const templates = messageTemplates[formData.messageType as keyof typeof messageTemplates];
+    const template = templates?.find((t) => t.id === templateId);
+
+    if (template) {
+      setFormData({
+        ...formData,
+        message: template.message,
+      });
+    }
   };
 
   const handleSave = async () => {
@@ -420,7 +680,7 @@ AI×コピペでアプリ開発の可能性を感じていただけましたで�
             <CheckCircle className="h-5 w-5 text-green-600" />
             <h3 className="text-lg font-semibold text-gray-900">申込完了メッセージ</h3>
           </div>
-          <p className="text-sm text-gray-600">セミナー申込直後に送信</p>
+          <p className="text-sm text-gray-600">申込直後に送信</p>
         </div>
 
         {completionTemplates.length === 0 ? (
@@ -434,7 +694,7 @@ AI×コピペでアプリ開発の可能性を感じていただけましたで�
                 申込完了メッセージを設定
               </h4>
               <p className="text-sm text-gray-500 mb-2">
-                セミナー申込直後に送信されるメッセージ
+                申込直後に送信されるメッセージ
               </p>
               <p className="text-xs text-gray-400">
                 {'{plan}'}, {'{datetime}'}, {'{time}'} が利用可能
@@ -494,12 +754,12 @@ AI×コピペでアプリ開発の可能性を感じていただけましたで�
         )}
       </div>
 
-      {/* セミナー申込後メッセージセクション */}
+      {/* 申込後メッセージセクション */}
       <div>
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center space-x-2">
             <Clock className="h-5 w-5 text-purple-600" />
-            <h3 className="text-lg font-semibold text-gray-900">セミナー申込後メッセージ</h3>
+            <h3 className="text-lg font-semibold text-gray-900">申込後メッセージ</h3>
           </div>
           <Button
             size="sm"
@@ -519,10 +779,10 @@ AI×コピペでアプリ開発の可能性を感じていただけましたで�
             <CardContent className="p-8 text-center">
               <Clock className="h-12 w-12 text-gray-300 mx-auto mb-3" />
               <h4 className="text-base font-medium text-gray-900 mb-1">
-                セミナー申込後メッセージを追加
+                申込後メッセージを追加
               </h4>
               <p className="text-sm text-gray-500">
-                セミナーに申し込んだ人向けのフォローメッセージ
+                申し込んだ人向けのフォローメッセージ
               </p>
             </CardContent>
           </Card>
@@ -544,7 +804,7 @@ AI×コピペでアプリ開発の可能性を感じていただけましたで�
                       </div>
                       <div>
                         <h4 className="font-semibold text-gray-900">ステップ {template.stepNumber}</h4>
-                        <p className="text-xs text-gray-500">セミナー {template.delayDays}日後</p>
+                        <p className="text-xs text-gray-500">申込 {template.delayDays}日後</p>
                       </div>
                     </div>
                     <div className="flex items-center space-x-2">
@@ -614,7 +874,7 @@ AI×コピペでアプリ開発の可能性を感じていただけましたで�
                 一般向けメッセージを追加
               </h4>
               <p className="text-sm text-gray-500">
-                まだセミナーに申し込んでいない人向けのメッセージ
+                まだ申し込んでいない人向けのメッセージ
               </p>
             </CardContent>
           </Card>
@@ -687,13 +947,34 @@ AI×コピペでアプリ開発の可能性を感じていただけましたで�
             </DialogTitle>
             <DialogDescription>
               {formData.messageType === 'welcome' && '友だち追加時に送信されるメッセージ'}
-              {formData.messageType === 'completion' && 'セミナー申込完了直後に送信されるメッセージ（変数: {plan}, {datetime}, {time}）'}
-              {formData.messageType === 'after-seminar' && 'セミナー申込後に送信されるメッセージ'}
-              {formData.messageType === 'general' && 'まだセミナーに申し込んでいない人向けのメッセージ'}
+              {formData.messageType === 'completion' && '申込完了直後に送信されるメッセージ（変数: {plan}, {datetime}, {time}）'}
+              {formData.messageType === 'after-seminar' && '申込後に送信されるメッセージ'}
+              {formData.messageType === 'general' && 'まだ申し込んでいない人向けのメッセージ'}
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4 py-4">
+            {/* テンプレート選択 */}
+            <div>
+              <Label htmlFor="template">メッセージテンプレート</Label>
+              <select
+                id="template"
+                value={selectedTemplate}
+                onChange={(e) => handleTemplateSelect(e.target.value)}
+                className="w-full px-3 py-2 border rounded-md text-sm"
+              >
+                <option value="">-- ひな形を選択 --</option>
+                {messageTemplates[formData.messageType as keyof typeof messageTemplates]?.map((template) => (
+                  <option key={template.id} value={template.id}>
+                    {template.name}
+                  </option>
+                ))}
+              </select>
+              <p className="text-xs text-gray-500 mt-1">
+                ひな形を選択すると、メッセージ欄に自動入力されます
+              </p>
+            </div>
+
             {formData.messageType !== 'welcome' && formData.messageType !== 'completion' && (
               <div className="grid grid-cols-2 gap-4">
                 <div>
@@ -708,7 +989,7 @@ AI×コピペでアプリ開発の可能性を感じていただけましたで�
                 </div>
                 <div>
                   <Label htmlFor="delayDays">
-                    {formData.messageType === 'after-seminar' ? 'セミナー後の日数' : '友だち追加後の日数'}
+                    {formData.messageType === 'after-seminar' ? '申込後の日数' : '友だち追加後の日数'}
                   </Label>
                   <Input
                     id="delayDays"

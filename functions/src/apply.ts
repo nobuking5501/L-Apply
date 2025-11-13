@@ -19,6 +19,7 @@ import {
   generateDayOfReminderMessage,
 } from './utils/messages';
 import { ApplyRequestBody } from './types';
+import { getConfig } from './config';
 
 export const apply = onRequest(
   {
@@ -71,8 +72,11 @@ export const apply = onRequest(
         return;
       }
 
+      // Get config (legacy mode - uses default organization)
+      const config = getConfig();
+
       // Upsert line_user
-      await upsertLineUser(userId, displayName, body.consent);
+      await upsertLineUser(userId, displayName, body.consent, config.app.organizationId);
 
       // Get user to check consent
       const user = await getLineUser(userId);

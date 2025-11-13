@@ -13,19 +13,19 @@ const STEP_MESSAGES = [
   {
     step: 1,
     delayDays: 1,
-    title: 'セミナー翌日',
+    title: '翌日',
     description: '個別相談の案内（初回）',
   },
   {
     step: 2,
     delayDays: 3,
-    title: 'セミナー3日後',
+    title: '3日後',
     description: '個別相談の案内（リマインド）',
   },
   {
     step: 3,
     delayDays: 7,
-    title: 'セミナー7日後',
+    title: '7日後',
     description: '個別相談の案内（最終）',
   },
 ];
@@ -123,9 +123,9 @@ export default function StepDeliveryPage() {
     <div className="space-y-6">
       {/* Header */}
       <div>
-        <h2 className="text-2xl font-bold text-gray-900">ステップ配信設定</h2>
+        <h2 className="text-2xl font-bold text-gray-900">ステップ配信監視</h2>
         <p className="text-sm text-gray-600 mt-1">
-          セミナー後の自動配信メッセージを管理します
+          申込後の自動配信メッセージの状況を確認できます
         </p>
       </div>
 
@@ -170,7 +170,7 @@ export default function StepDeliveryPage() {
                   <h4 className="text-sm font-semibold text-gray-900">{step.title}</h4>
                   <p className="text-sm text-gray-600 mt-1">{step.description}</p>
                   <p className="text-xs text-gray-500 mt-2">
-                    セミナー日時の{step.delayDays}日後に配信
+                    申込日時の{step.delayDays}日後に配信
                   </p>
                 </div>
                 <div className="text-right">

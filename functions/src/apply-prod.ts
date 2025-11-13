@@ -82,7 +82,7 @@ export const apply = onRequest(
       }
 
       // Upsert line_user
-      await firestore.upsertLineUser(userId, displayName, body.consent);
+      await firestore.upsertLineUser(userId, displayName, body.consent, orgConfig.organizationId);
 
       // Get user to check consent
       const user = await firestore.getLineUser(userId);

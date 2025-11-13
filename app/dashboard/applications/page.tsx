@@ -10,11 +10,17 @@ import { Button } from '@/components/ui/button';
 import { Search, Download, Mail, Phone, Calendar, MapPin } from 'lucide-react';
 import type { Application, Event } from '@/types';
 
+interface LineUser {
+  userId: string;
+  displayName: string;
+}
+
 export default function ApplicationsPage() {
   const { userData } = useAuth();
   const [loading, setLoading] = useState(true);
   const [applications, setApplications] = useState<Application[]>([]);
   const [events, setEvents] = useState<Event[]>([]);
+  const [lineUsers, setLineUsers] = useState<Map<string, string>>(new Map());
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState<string>('all');
 
@@ -46,8 +52,21 @@ export default function ApplicationsPage() {
           ...doc.data(),
         })) as Event[];
 
+        // Fetch LINE users for this organization
+        const lineUsersQuery = query(
+          collection(db, 'line_users'),
+          where('organizationId', '==', userData.organizationId)
+        );
+        const lineUsersSnapshot = await getDocs(lineUsersQuery);
+        const lineUsersMap = new Map<string, string>();
+        lineUsersSnapshot.docs.forEach((doc) => {
+          const data = doc.data();
+          lineUsersMap.set(data.userId, data.displayName || data.userId);
+        });
+
         setApplications(applicationsData);
         setEvents(eventsData);
+        setLineUsers(lineUsersMap);
       } catch (error) {
         console.error('Error fetching data:', error);
       } finally {
@@ -63,6 +82,16 @@ export default function ApplicationsPage() {
     return event?.title || 'イベント不明';
   };
 
+  const getDisplayName = (application: Application) => {
+    if (application.name) {
+      return application.name;
+    }
+    if (application.userId) {
+      return lineUsers.get(application.userId) || application.userId;
+    }
+    return '名前なし';
+  };
+
   const handleExportCSV = () => {
     // Create CSV content (support both LINE and dashboard applications)
     const headers = ['名前/ユーザーID', 'メールアドレス', '電話番号', 'イベント/プラン', '開催日時', '申込日時', 'ステータス'];
@@ -72,7 +101,7 @@ export default function ApplicationsPage() {
                                app.status === 'confirmed' ? '確認済' :
                                app.status === 'cancelled' ? 'キャンセル' : '保留中';
       return [
-        app.name || app.userId || '',
+        getDisplayName(app),
         app.email || '',
         app.phone || '',
         app.eventId ? getEventTitle(app.eventId) : (app.plan || ''),
@@ -92,11 +121,11 @@ export default function ApplicationsPage() {
 
   // Filter applications (support both LINE and dashboard applications)
   const filteredApplications = applications.filter((app) => {
+    const displayName = getDisplayName(app);
     const matchesSearch =
-      (app.name?.toLowerCase().includes(searchTerm.toLowerCase()) ?? false) ||
+      displayName.toLowerCase().includes(searchTerm.toLowerCase()) ||
       (app.email?.toLowerCase().includes(searchTerm.toLowerCase()) ?? false) ||
       (app.phone?.includes(searchTerm) ?? false) ||
-      (app.userId?.includes(searchTerm) ?? false) ||
       (app.plan?.toLowerCase().includes(searchTerm.toLowerCase()) ?? false);
 
     // Map 'applied' to 'pending' and 'canceled' to 'cancelled' for legacy data
@@ -243,7 +272,7 @@ export default function ApplicationsPage() {
                   : '未設定';
 
                 // Support both LINE and dashboard applications
-                const displayName = application.name || application.userId || '名前なし';
+                const displayName = getDisplayName(application);
                 const displayEvent = application.eventId
                   ? getEventTitle(application.eventId)
                   : (application.plan || 'イベント/プラン不明');

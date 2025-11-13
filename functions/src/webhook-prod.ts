@@ -166,7 +166,7 @@ async function handleFollowEvent(event: WebhookEvent): Promise<void> {
     const profile = await getProfile(userId);
 
     // Save user to Firestore
-    await firestore.upsertLineUser(userId, profile.displayName, true);
+    await firestore.upsertLineUser(userId, profile.displayName, true, organizationId);
 
     // Get welcome message template from Firestore
     const welcomeMessage = await firestore.getWelcomeMessageTemplate(organizationId);

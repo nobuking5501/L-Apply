@@ -1,11 +1,11 @@
 /**
  * ステップ配信メッセージの設定
- * セミナー申込後の個別相談案内
+ * 申込後の個別相談案内
  */
 
 export interface StepMessageConfig {
   step: number;
-  delayDays: number; // セミナー日時からの日数
+  delayDays: number; // 申込日時からの日数
   message: string;
 }
 
@@ -13,15 +13,15 @@ export interface StepMessageConfig {
  * ステップ配信メッセージ定義
  *
  * タイミング：
- * - Step 1: セミナー翌日
- * - Step 2: セミナー3日後
- * - Step 3: セミナー7日後
+ * - Step 1: 翌日
+ * - Step 2: 3日後
+ * - Step 3: 7日後
  */
 export const STEP_MESSAGES: StepMessageConfig[] = [
   {
     step: 1,
-    delayDays: 1, // セミナー翌日
-    message: `セミナーへのご参加ありがとうございました！🎉
+    delayDays: 1, // 翌日
+    message: `イベントへのご参加ありがとうございました！🎉
 
 いかがでしたか？
 AI×コピペでアプリ開発の可能性を感じていただけましたでしょうか。
@@ -38,9 +38,9 @@ AI×コピペでアプリ開発の可能性を感じていただけましたで�
   },
   {
     step: 2,
-    delayDays: 3, // セミナー3日後
+    delayDays: 3, // 3日後
     message: `こんにちは！
-セミナーから少し時間が経ちましたが、アプリ開発は進んでいますか？😊
+イベントから少し時間が経ちましたが、アプリ開発は進んでいますか？😊
 
 【無料個別相談、まだ受付中です】
 
@@ -58,8 +58,8 @@ AI×コピペでアプリ開発の可能性を感じていただけましたで�
   },
   {
     step: 3,
-    delayDays: 7, // セミナー7日後
-    message: `セミナーからもうすぐ1週間ですね📆
+    delayDays: 7, // 7日後
+    message: `イベントからもうすぐ1週間ですね📆
 
 【個別相談ラストチャンス！】
 

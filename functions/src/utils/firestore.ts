@@ -20,7 +20,7 @@ export function getDb(): FirebaseFirestore.Firestore {
 /**
  * Upsert line_user document
  */
-export async function upsertLineUser(userId: string, displayName: string, consent: boolean): Promise<void> {
+export async function upsertLineUser(userId: string, displayName: string, consent: boolean, organizationId: string): Promise<void> {
   const userRef = getDb().collection(LINE_USERS).doc(userId);
   const now = Timestamp.now();
 
@@ -31,6 +31,7 @@ export async function upsertLineUser(userId: string, displayName: string, consen
     await userRef.update({
       displayName,
       consent,
+      organizationId,
       updatedAt: now,
     });
   } else {
@@ -39,6 +40,7 @@ export async function upsertLineUser(userId: string, displayName: string, consen
       userId,
       displayName,
       consent,
+      organizationId,
       createdAt: now,
       updatedAt: now,
     };

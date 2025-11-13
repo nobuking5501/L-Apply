@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { collection, query, where, getDocs, addDoc, updateDoc, deleteDoc, doc, orderBy, Timestamp } from 'firebase/firestore';
+import { collection, query, where, getDocs, addDoc, updateDoc, deleteDoc, doc, Timestamp } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { useAuth } from '@/contexts/AuthContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -32,14 +32,20 @@ export default function EventsPage() {
       try {
         const eventsQuery = query(
           collection(db, 'events'),
-          where('organizationId', '==', userData.organizationId),
-          orderBy('createdAt', 'desc')
+          where('organizationId', '==', userData.organizationId)
         );
         const eventsSnapshot = await getDocs(eventsQuery);
         const eventsData = eventsSnapshot.docs.map((doc) => ({
           id: doc.id,
           ...doc.data(),
         })) as Event[];
+
+        // クライアント側でソート
+        eventsData.sort((a, b) => {
+          const aTime = a.createdAt?.toMillis?.() || 0;
+          const bTime = b.createdAt?.toMillis?.() || 0;
+          return bTime - aTime;
+        });
 
         setEvents(eventsData);
       } catch (error) {
@@ -82,14 +88,21 @@ export default function EventsPage() {
       // Refresh events
       const eventsQuery = query(
         collection(db, 'events'),
-        where('organizationId', '==', userData.organizationId),
-        orderBy('createdAt', 'desc')
+        where('organizationId', '==', userData.organizationId)
       );
       const eventsSnapshot = await getDocs(eventsQuery);
       const eventsData = eventsSnapshot.docs.map((doc) => ({
         id: doc.id,
         ...doc.data(),
       })) as Event[];
+
+      // クライアント側でソート
+      eventsData.sort((a, b) => {
+        const aTime = a.createdAt?.toMillis?.() || 0;
+        const bTime = b.createdAt?.toMillis?.() || 0;
+        return bTime - aTime;
+      });
+
       setEvents(eventsData);
     } catch (error) {
       console.error('Error creating event:', error);
@@ -119,14 +132,21 @@ export default function EventsPage() {
       // Refresh events
       const eventsQuery = query(
         collection(db, 'events'),
-        where('organizationId', '==', userData.organizationId),
-        orderBy('createdAt', 'desc')
+        where('organizationId', '==', userData.organizationId)
       );
       const eventsSnapshot = await getDocs(eventsQuery);
       const eventsData = eventsSnapshot.docs.map((doc) => ({
         id: doc.id,
         ...doc.data(),
       })) as Event[];
+
+      // クライアント側でソート
+      eventsData.sort((a, b) => {
+        const aTime = a.createdAt?.toMillis?.() || 0;
+        const bTime = b.createdAt?.toMillis?.() || 0;
+        return bTime - aTime;
+      });
+
       setEvents(eventsData);
     } catch (error) {
       console.error('Error updating event:', error);
@@ -325,7 +345,7 @@ export default function EventsPage() {
                   onChange={(e) =>
                     setFormData({ ...formData, title: e.target.value })
                   }
-                  placeholder="セミナータイトル"
+                  placeholder="イベントタイトル"
                 />
               </div>
 
