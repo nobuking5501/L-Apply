@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { collection, query, where, getDocs, orderBy } from 'firebase/firestore';
+import { collection, query, where, getDocs, orderBy, doc, getDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { useAuth } from '@/contexts/AuthContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -52,17 +52,22 @@ export default function ApplicationsPage() {
           ...doc.data(),
         })) as Event[];
 
-        // Fetch LINE users for this organization
-        const lineUsersQuery = query(
-          collection(db, 'line_users'),
-          where('organizationId', '==', userData.organizationId)
-        );
-        const lineUsersSnapshot = await getDocs(lineUsersQuery);
+        // Get unique userIds from applications
+        const userIds = [...new Set(applicationsData.map(app => app.userId).filter((id): id is string => !!id))];
+
+        // Fetch LINE users for these userIds
         const lineUsersMap = new Map<string, string>();
-        lineUsersSnapshot.docs.forEach((doc) => {
-          const data = doc.data();
-          lineUsersMap.set(data.userId, data.displayName || data.userId);
-        });
+        for (const userId of userIds) {
+          try {
+            const userDoc = await getDoc(doc(db, 'line_users', userId));
+            if (userDoc.exists()) {
+              const data = userDoc.data();
+              lineUsersMap.set(userId, data.displayName || userId);
+            }
+          } catch (error) {
+            console.error(`Error fetching LINE user ${userId}:`, error);
+          }
+        }
 
         setApplications(applicationsData);
         setEvents(eventsData);
