@@ -1,0 +1,12 @@
+functions
+out
+.firebase
+firebase-debug.log
+firebase-debug.*.log
+.firebaserc
+firebase.json
+firestore.rules
+firestore.indexes.json
+.git
+.github
+node_modules
