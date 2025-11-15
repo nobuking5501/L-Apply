@@ -1,0 +1,12 @@
+Write(WORKFLOW_CODE.txt)
+  ⎿  Wrote 47 lines to WORKFLOW_CODE.txt
+     name: Deploy Cloud Functions
+     on:
+       push:
+         branches:
+           - main
+         paths:
+           - 'functions/**'
+           - '.github/workflows/deploy-functions.yml'
+       workflow_dispatch:
+     … +37 lines (ctrl+o to expand)
