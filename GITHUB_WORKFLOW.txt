@@ -1,0 +1,75 @@
+========================================
+GitHub Actions ワークフローコード
+========================================
+
+以下の手順でGitHubにファイルを作成してください：
+
+1. https://github.com/nobuking5501/L-Apply にアクセス
+2. 「Add file」→「Create new file」をクリック
+3. ファイル名に以下を入力：
+   .github/workflows/deploy-functions.yml
+
+4. 以下のコードをコピー＆ペースト：
+
+========================================
+コード開始
+========================================
+name: Deploy Cloud Functions
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'functions/**'
+      - '.github/workflows/deploy-functions.yml'
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    name: Deploy to Firebase
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: functions/package-lock.json
+
+      - name: Install dependencies
+        run: |
+          cd functions
+          npm ci
+
+      - name: Build functions
+        run: |
+          cd functions
+          npm run build
+
+      - name: Create service account file
+        run: |
+          echo '${{ secrets.FIREBASE_SERVICE_ACCOUNT }}' > $HOME/gcloud-key.json
+          export GOOGLE_APPLICATION_CREDENTIALS=$HOME/gcloud-key.json
+
+      - name: Deploy to Firebase Functions
+        run: |
+          npm install -g firebase-tools
+          export GOOGLE_APPLICATION_CREDENTIALS=$HOME/gcloud-key.json
+          firebase deploy --only functions --project l-apply
+        env:
+          FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
+          GOOGLE_APPLICATION_CREDENTIALS: $HOME/gcloud-key.json
+========================================
+コード終了
+========================================
+
+5. 「Commit changes」をクリック
+6. Commit message: Add GitHub Actions workflow
+7. 「Commit changes」を再度クリック
+
+完了！
