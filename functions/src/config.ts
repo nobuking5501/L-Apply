@@ -1,5 +1,6 @@
 import { Config, GlobalConfig, OrganizationConfig } from './types';
 import { getDb } from './utils/firestore';
+import { ensureFirebaseInitialized } from './utils/firebase-init';
 
 // Load global config from environment variables
 export function getGlobalConfig(): GlobalConfig {
@@ -16,6 +17,9 @@ export function getGlobalConfig(): GlobalConfig {
 export async function getOrganizationConfig(
   organizationId: string
 ): Promise<OrganizationConfig> {
+  // Ensure Firebase is initialized before accessing Firestore
+  ensureFirebaseInitialized();
+
   const db = getDb();
   const orgDoc = await db.collection('organizations').doc(organizationId).get();
 
