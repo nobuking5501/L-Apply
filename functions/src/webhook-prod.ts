@@ -1,6 +1,7 @@
 import { onRequest } from 'firebase-functions/v2/https';
 import { verifySignature, replyMessage, createTextMessage, getProfile, pushMessage } from './utils/line';
 import { ensureFirebaseInitialized } from './utils/firebase-init';
+import { getOrganizationConfig } from './config';
 import * as firestore from './utils/firestore';
 import * as messages from './utils/messages';
 import * as stepDelivery from './utils/step-delivery';
@@ -29,27 +30,40 @@ export const webhook = onRequest(
       return;
     }
 
-    // Verify signature
-    const signature = req.headers['x-line-signature'] as string;
-    if (!signature) {
-      res.status(400).send('Missing signature');
-      return;
-    }
-
-    const body = JSON.stringify(req.body);
-    if (!verifySignature(body, signature)) {
-      res.status(401).send('Invalid signature');
-      return;
-    }
-
     try {
+      // Initialize Firebase
+      ensureFirebaseInitialized();
+
+      // Get organization config
+      const organizationId = process.env.ORGANIZATION_ID || '';
+      if (!organizationId) {
+        console.error('ORGANIZATION_ID not set');
+        res.status(500).send('Server configuration error');
+        return;
+      }
+
+      const orgConfig = await getOrganizationConfig(organizationId);
+
+      // Verify signature
+      const signature = req.headers['x-line-signature'] as string;
+      if (!signature) {
+        res.status(400).send('Missing signature');
+        return;
+      }
+
+      const body = JSON.stringify(req.body);
+      if (!verifySignature(body, signature, orgConfig.line.channelSecret)) {
+        res.status(401).send('Invalid signature');
+        return;
+      }
+
       const events: WebhookEvent[] = req.body.events;
 
       for (const event of events) {
         if (event.type === 'message' && event.message?.type === 'text') {
-          await handleTextMessage(event);
+          await handleTextMessage(event, orgConfig);
         } else if (event.type === 'follow') {
-          await handleFollowEvent(event);
+          await handleFollowEvent(event, orgConfig);
         }
       }
 
@@ -61,7 +75,7 @@ export const webhook = onRequest(
   }
 );
 
-async function handleTextMessage(event: WebhookEvent): Promise<void> {
+async function handleTextMessage(event: WebhookEvent, orgConfig: any): Promise<void> {
   if (event.message?.type !== 'text') {
     return;
   }
@@ -73,11 +87,9 @@ async function handleTextMessage(event: WebhookEvent): Promise<void> {
 
   const text = event.message.text?.trim() || '';
   const replyToken = event.replyToken;
+  const accessToken = orgConfig.line.channelAccessToken;
 
   try {
-    // Initialize Firebase
-    ensureFirebaseInitialized();
-
     // Get Firestore instance
     const db = firestore.getDb();
 
@@ -89,27 +101,27 @@ async function handleTextMessage(event: WebhookEvent): Promise<void> {
       await stepDelivery.skipAllStepDeliveriesForUser(db, userId);
 
       const message = messages.generateConsentUpdateMessage(false);
-      await replyMessage(replyToken, [createTextMessage(message)]);
+      await replyMessage(replyToken, [createTextMessage(message)], accessToken);
     } else if (text === '再開' || text === '停止解除') {
       await firestore.updateUserConsent(userId, true);
       const message = messages.generateConsentUpdateMessage(true);
-      await replyMessage(replyToken, [createTextMessage(message)]);
+      await replyMessage(replyToken, [createTextMessage(message)], accessToken);
     } else if (text === '予約確認') {
       const application = await firestore.getLatestApplication(userId);
 
       if (!application) {
         const message = messages.generateNoReservationMessage();
-        await replyMessage(replyToken, [createTextMessage(message)]);
+        await replyMessage(replyToken, [createTextMessage(message)], accessToken);
       } else {
         const message = messages.generateReservationConfirmationMessage(application.plan, application.slotAt);
-        await replyMessage(replyToken, [createTextMessage(message)]);
+        await replyMessage(replyToken, [createTextMessage(message)], accessToken);
       }
     } else if (text === 'キャンセル') {
       const application = await firestore.getLatestApplication(userId);
 
       if (!application) {
         const message = messages.generateNoReservationMessage();
-        await replyMessage(replyToken, [createTextMessage(message)]);
+        await replyMessage(replyToken, [createTextMessage(message)], accessToken);
       } else {
         // Cancel application
         await firestore.cancelApplication(application.id!);
@@ -121,16 +133,16 @@ async function handleTextMessage(event: WebhookEvent): Promise<void> {
         await stepDelivery.skipAllStepDeliveriesForApplication(db, application.id!);
 
         const message = messages.generateCancellationMessage(application.slotAt);
-        await replyMessage(replyToken, [createTextMessage(message)]);
+        await replyMessage(replyToken, [createTextMessage(message)], accessToken);
       }
     } else {
       // Check for auto-reply messages
-      const organizationId = process.env.ORGANIZATION_ID || '';
+      const organizationId = orgConfig.organizationId;
       const autoReplyMessage = await firestore.getAutoReplyMessage(organizationId, text);
 
       if (autoReplyMessage) {
         // Send auto-reply message
-        await replyMessage(replyToken, [createTextMessage(autoReplyMessage)]);
+        await replyMessage(replyToken, [createTextMessage(autoReplyMessage)], accessToken);
 
         // If it's a consultation request, save it
         if (text === '個別相談希望' || text === '個別相談' || text === '相談希望') {
@@ -139,7 +151,7 @@ async function handleTextMessage(event: WebhookEvent): Promise<void> {
       } else {
         // Unknown command
         const message = messages.generateUnknownCommandMessage();
-        await replyMessage(replyToken, [createTextMessage(message)]);
+        await replyMessage(replyToken, [createTextMessage(message)], accessToken);
       }
     }
   } catch (error) {
@@ -148,22 +160,19 @@ async function handleTextMessage(event: WebhookEvent): Promise<void> {
   }
 }
 
-async function handleFollowEvent(event: WebhookEvent): Promise<void> {
+async function handleFollowEvent(event: WebhookEvent, orgConfig: any): Promise<void> {
   const userId = event.source.userId;
   if (!userId) {
     return;
   }
 
   try {
-    // Initialize Firebase
-    ensureFirebaseInitialized();
-
-    // Get config from environment variables
-    const organizationId = process.env.ORGANIZATION_ID || '';
-    const liffId = process.env.LIFF_ID || '';
+    const organizationId = orgConfig.organizationId;
+    const liffId = orgConfig.liff.id;
+    const accessToken = orgConfig.line.channelAccessToken;
 
     // Get user profile from LINE
-    const profile = await getProfile(userId);
+    const profile = await getProfile(userId, accessToken);
 
     // Save user to Firestore
     await firestore.upsertLineUser(userId, profile.displayName, true, organizationId);
@@ -177,12 +186,12 @@ async function handleFollowEvent(event: WebhookEvent): Promise<void> {
       const messageWithLink = `${welcomeMessage}\n\n【セミナー申込はこちら】\n${liffUrl}`;
 
       // Send welcome message
-      await pushMessage(userId, [createTextMessage(messageWithLink)]);
+      await pushMessage(userId, [createTextMessage(messageWithLink)], accessToken);
     } else {
       // Fallback welcome message if no template is configured
       const liffUrl = `https://liff.line.me/${liffId}`;
       const defaultMessage = `友だち追加ありがとうございます！\n\nセミナーのお申込みは下記のリンクからどうぞ。\n${liffUrl}`;
-      await pushMessage(userId, [createTextMessage(defaultMessage)]);
+      await pushMessage(userId, [createTextMessage(defaultMessage)], accessToken);
     }
   } catch (error) {
     console.error('Error handling follow event:', error);
