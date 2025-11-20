@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { collection, query, where, getDocs, addDoc, updateDoc, deleteDoc, doc, Timestamp, writeBatch } from 'firebase/firestore';
+import { collection, query, where, getDocs, getDoc, addDoc, updateDoc, deleteDoc, doc, Timestamp, writeBatch } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { useAuth } from '@/contexts/AuthContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -62,6 +62,29 @@ export default function EventsPage() {
     if (!userData?.organizationId) return;
 
     try {
+      // Check subscription limits before creating event
+      const orgDoc = await getDoc(doc(db, 'organizations', userData.organizationId));
+      if (!orgDoc.exists()) {
+        alert('組織情報が見つかりません');
+        return;
+      }
+
+      const orgData = orgDoc.data();
+      const subscription = orgData.subscription || {
+        limits: { maxEvents: 3 },
+      };
+      const usage = orgData.usage || { eventsCount: 0 };
+
+      // Count current events
+      const currentEventsCount = events.length;
+
+      if (currentEventsCount >= subscription.limits.maxEvents) {
+        alert(
+          `イベント作成数の上限（${subscription.limits.maxEvents}件）に達しています。\n\nプランをアップグレードするには、サイドバーの「サブスクリプション」をご確認ください。`
+        );
+        return;
+      }
+
       const slotsWithIds = formData.slots.map((slot, index) => ({
         ...slot,
         id: `slot-${Date.now()}-${index}`,

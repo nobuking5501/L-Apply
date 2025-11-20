@@ -17,6 +17,7 @@ import {
   ChevronDown,
   MessageSquare,
   Calendar,
+  CreditCard,
 } from 'lucide-react';
 
 const navigation = [
@@ -26,6 +27,7 @@ const navigation = [
   { name: 'ステップ配信設定', href: '/dashboard/step-messages', icon: MessageSquare },
   { name: '自動返信設定', href: '/dashboard/auto-replies', icon: MessageSquare },
   { name: '申込者管理', href: '/dashboard/applications', icon: Users },
+  { name: 'サブスクリプション', href: '/dashboard/subscription', icon: CreditCard },
   { name: '設定', href: '/dashboard/settings', icon: Settings },
 ];
 

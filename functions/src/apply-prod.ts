@@ -81,6 +81,23 @@ export const apply = onRequest(
         return;
       }
 
+      // Check subscription limits
+      try {
+        const { canAcceptApplication, incrementApplicationCount } = await import('./utils/admin-firestore');
+        const canAccept = await canAcceptApplication(orgConfig.organizationId);
+
+        if (!canAccept) {
+          res.status(403).json({
+            error: 'Application limit reached',
+            message: '今月の申込上限に達しています。プランのアップグレードをご検討ください。',
+          });
+          return;
+        }
+      } catch (error) {
+        // Gracefully handle if subscription info doesn't exist yet
+        console.warn('Subscription check failed, continuing anyway:', error);
+      }
+
       // Upsert line_user
       await firestore.upsertLineUser(userId, displayName, body.consent, orgConfig.organizationId);
 
@@ -101,34 +118,71 @@ export const apply = onRequest(
         createdAt: Timestamp.now(),
       });
 
+      // Increment application count for subscription tracking
+      try {
+        const { incrementApplicationCount } = await import('./utils/admin-firestore');
+        await incrementApplicationCount(orgConfig.organizationId);
+      } catch (error) {
+        console.warn('Failed to increment application count:', error);
+      }
+
       // Create reminders if consent is true
       if (user.consent) {
-        const t24hTime = timezone.calculateT24hReminder(slotAt);
-        const dayOfTime = timezone.calculateDayOfReminder(slotAt);
+        // Check if organization can create reminders
+        let canCreateReminders = true;
+        try {
+          const { canCreateReminder, incrementReminderCount } = await import('./utils/admin-firestore');
 
-        // T-24h reminder
-        await firestore.createReminder({
-          applicationId,
-          userId,
-          scheduledAt: t24hTime,
-          type: 'T-24h',
-          sentAt: null,
-          canceled: false,
-          message: messages.generateT24hReminderMessage(body.plan, slotAt),
-          organizationId: orgConfig.organizationId,
-        });
+          // We create 2 reminders per application (T-24h and day-of)
+          // Check if we have room for both
+          const canCreate = await canCreateReminder(orgConfig.organizationId);
 
-        // Day-of reminder (8 AM)
-        await firestore.createReminder({
-          applicationId,
-          userId,
-          scheduledAt: dayOfTime,
-          type: 'day-of',
-          sentAt: null,
-          canceled: false,
-          message: messages.generateDayOfReminderMessage(body.plan, slotAt),
-          organizationId: orgConfig.organizationId,
-        });
+          if (!canCreate) {
+            console.warn(`Reminder limit reached for organization: ${orgConfig.organizationId}`);
+            canCreateReminders = false;
+          }
+        } catch (error) {
+          console.warn('Reminder limit check failed, skipping reminders:', error);
+          canCreateReminders = false;
+        }
+
+        if (canCreateReminders) {
+          const t24hTime = timezone.calculateT24hReminder(slotAt);
+          const dayOfTime = timezone.calculateDayOfReminder(slotAt);
+
+          // T-24h reminder
+          await firestore.createReminder({
+            applicationId,
+            userId,
+            scheduledAt: t24hTime,
+            type: 'T-24h',
+            sentAt: null,
+            canceled: false,
+            message: messages.generateT24hReminderMessage(body.plan, slotAt),
+            organizationId: orgConfig.organizationId,
+          });
+
+          // Day-of reminder (8 AM)
+          await firestore.createReminder({
+            applicationId,
+            userId,
+            scheduledAt: dayOfTime,
+            type: 'day-of',
+            sentAt: null,
+            canceled: false,
+            message: messages.generateDayOfReminderMessage(body.plan, slotAt),
+            organizationId: orgConfig.organizationId,
+          });
+
+          // Increment reminder count (we created 2 reminders)
+          try {
+            const { incrementReminderCount } = await import('./utils/admin-firestore');
+            await incrementReminderCount(orgConfig.organizationId);
+            await incrementReminderCount(orgConfig.organizationId);
+          } catch (error) {
+            console.warn('Failed to increment reminder count:', error);
+          }
+        }
       }
 
       // Create step delivery schedule (after seminar date)
@@ -139,16 +193,47 @@ export const apply = onRequest(
         orgConfig.organizationId
       );
 
-      // Save step deliveries to Firestore
+      // Check subscription limits for step deliveries
+      let allowedStepDeliveriesCount = stepDeliveries.length;
+      try {
+        const { canCreateStepDelivery, incrementStepDeliveryCount } = await import('./utils/admin-firestore');
+
+        // Check how many step deliveries we can create
+        allowedStepDeliveriesCount = 0;
+        for (let i = 0; i < stepDeliveries.length; i++) {
+          const canCreate = await canCreateStepDelivery(orgConfig.organizationId);
+          if (!canCreate) {
+            console.warn(`Step delivery limit reached for organization: ${orgConfig.organizationId}. Created ${allowedStepDeliveriesCount}/${stepDeliveries.length} step deliveries.`);
+            break;
+          }
+          allowedStepDeliveriesCount++;
+        }
+      } catch (error) {
+        console.warn('Step delivery limit check failed, creating all step deliveries:', error);
+      }
+
+      // Save step deliveries to Firestore (only allowed count)
       const db = firestore.getDb();
       const batch = db.batch();
 
-      for (const delivery of stepDeliveries) {
+      for (let i = 0; i < allowedStepDeliveriesCount; i++) {
         const docRef = db.collection('step_deliveries').doc();
-        batch.set(docRef, delivery);
+        batch.set(docRef, stepDeliveries[i]);
       }
 
       await batch.commit();
+
+      // Increment step delivery count for subscription tracking
+      if (allowedStepDeliveriesCount > 0) {
+        try {
+          const { incrementStepDeliveryCount } = await import('./utils/admin-firestore');
+          for (let i = 0; i < allowedStepDeliveriesCount; i++) {
+            await incrementStepDeliveryCount(orgConfig.organizationId);
+          }
+        } catch (error) {
+          console.warn('Failed to increment step delivery count:', error);
+        }
+      }
 
       // Send completion message
       const template = await firestore.getCompletionMessageTemplate(orgConfig.organizationId);

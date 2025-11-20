@@ -26,7 +26,7 @@ interface AuthContextType {
   userData: UserData | null;
   loading: boolean;
   signIn: (email: string, password: string) => Promise<void>;
-  signUp: (email: string, password: string, displayName: string) => Promise<void>;
+  signUp: (email: string, password: string, displayName: string, plan?: string) => Promise<void>;
   signOut: () => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
 }
@@ -77,7 +77,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await signInWithEmailAndPassword(auth, email, password);
   };
 
-  const signUp = async (email: string, password: string, displayName: string) => {
+  const signUp = async (email: string, password: string, displayName: string, plan: string = 'test') => {
     try {
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       const user = userCredential.user;
@@ -86,11 +86,70 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const orgId = `org_${user.uid}`;
       const orgDocRef = doc(db, 'organizations', orgId);
 
+      // Define plan limits based on selected plan
+      const getPlanLimits = (planType: string) => {
+        switch (planType) {
+          case 'test':
+            return {
+              maxEvents: 1,
+              maxStepDeliveries: 0,
+              maxReminders: 0,
+              maxApplicationsPerMonth: 10,
+            };
+          case 'monitor':
+            return {
+              maxEvents: 10,
+              maxStepDeliveries: 3,
+              maxReminders: 5,
+              maxApplicationsPerMonth: 100,
+            };
+          case 'regular':
+            return {
+              maxEvents: 10,
+              maxStepDeliveries: 3,
+              maxReminders: 10,
+              maxApplicationsPerMonth: 300,
+            };
+          case 'pro':
+            return {
+              maxEvents: 50,
+              maxStepDeliveries: 10,
+              maxReminders: 50,
+              maxApplicationsPerMonth: 1000,
+            };
+          default:
+            return {
+              maxEvents: 1,
+              maxStepDeliveries: 0,
+              maxReminders: 0,
+              maxApplicationsPerMonth: 10,
+            };
+        }
+      };
+
+      const now = serverTimestamp();
+      const trialEnd = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000); // 14 days from now
+
       await setDoc(orgDocRef, {
         name: `${displayName}の組織`,
-        plan: 'free',
-        createdAt: serverTimestamp(),
+        createdAt: now,
+        updatedAt: now,
         ownerId: user.uid,
+        subscription: {
+          plan: plan,
+          status: plan === 'test' ? 'trial' : 'active',
+          limits: getPlanLimits(plan),
+          trialEndsAt: plan === 'test' ? trialEnd : null,
+          currentPeriodStart: now,
+          currentPeriodEnd: trialEnd,
+        },
+        usage: {
+          eventsCount: 0,
+          stepDeliveriesCount: 0,
+          remindersCount: 0,
+          applicationsThisMonth: 0,
+          lastResetAt: now,
+        },
       });
 
       // Create user document
@@ -101,7 +160,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         displayName,
         organizationId: orgId,
         role: 'owner',
-        createdAt: serverTimestamp(),
+        createdAt: now,
       });
 
       // Wait a moment for Firestore to propagate

@@ -16,16 +16,23 @@ service cloud.firestore {
              get(/databases/$(database)/documents/users/$(request.auth.uid)).data.organizationId == orgId;
     }
 
+    function isAdmin() {
+      return isSignedIn() &&
+             exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
     // Organizations - 新規作成時はorgIdがユーザーIDと一致する場合のみ許可
     match /organizations/{orgId} {
       allow read: if true; // LIFFからも読める（liffIdで検索するため）
       allow create: if isSignedIn() && orgId == 'org_' + request.auth.uid;
-      allow update, delete: if isSameOrganization(orgId);
+      allow update, delete: if isSameOrganization(orgId) || isAdmin();
     }
 
     // Users - 自分のドキュメントのみ作成・読み書き可能
     match /users/{userId} {
-      allow read, create, update: if isOwner(userId);
+      allow read: if isSignedIn(); // 管理画面用に他ユーザーも読めるように変更
+      allow create, update: if isOwner(userId);
       allow delete: if false;
     }
 

@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { collection, query, where, getDocs, doc, setDoc, deleteDoc } from 'firebase/firestore';
+import { collection, query, where, getDocs, getDoc, doc, setDoc, deleteDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { useAuth } from '@/contexts/AuthContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -516,6 +516,36 @@ https://us06web.zoom.us/j/87121074742?pwd=fkDi1VODGlqbs7jmseQFoI7FXhqqdd.1
       const existingCompletion = templates.find((t) => t.messageType === 'completion');
       if (existingCompletion) {
         alert('申込完了メッセージは既に存在します。既存のメッセージを編集してください。');
+        return;
+      }
+    }
+
+    // サブスクリプション制限のチェック（新規作成時のみ）
+    if (!editingTemplate?.id) {
+      try {
+        const orgDoc = await getDoc(doc(db, 'organizations', userData.organizationId));
+        if (!orgDoc.exists()) {
+          alert('組織情報が見つかりません');
+          return;
+        }
+
+        const orgData = orgDoc.data();
+        const subscription = orgData.subscription || {
+          limits: { maxStepDeliveries: 3 },
+        };
+
+        // 現在のステップ配信数をカウント
+        const currentStepDeliveriesCount = templates.length;
+
+        if (currentStepDeliveriesCount >= subscription.limits.maxStepDeliveries) {
+          alert(
+            `ステップ配信数の上限（${subscription.limits.maxStepDeliveries}件）に達しています。\n\nプランをアップグレードするには、サイドバーの「サブスクリプション」をご確認ください。`
+          );
+          return;
+        }
+      } catch (error) {
+        console.error('Error checking subscription limits:', error);
+        alert('サブスクリプション情報の確認に失敗しました');
         return;
       }
     }
