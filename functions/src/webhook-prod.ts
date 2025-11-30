@@ -7,6 +7,7 @@ import * as stepDelivery from './utils/step-delivery';
 import { getOrganizationConfig } from './config';
 
 // LINE Webhook Event types
+// Multi-tenant support: Automatically identifies organization from webhook signature
 interface WebhookEvent {
   type: string;
   message?: {
