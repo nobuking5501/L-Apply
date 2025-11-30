@@ -7,6 +7,7 @@ import * as timezone from './utils/timezone';
 import * as messages from './utils/messages';
 import * as stepDelivery from './utils/step-delivery';
 import { getOrganizationConfig } from './config';
+import { ReminderType } from './types';
 
 interface ApplyRequestBody {
   idToken: string;
@@ -128,60 +129,105 @@ export const apply = onRequest(
 
       // Create reminders if consent is true
       if (user.consent) {
-        // Check if organization can create reminders
+        // Get reminder templates from Firestore
+        const { getReminderTemplates, calculateReminderTime } = await import('./utils/reminder-helper');
+        const db = firestore.getDb();
+        const reminderTemplates = await getReminderTemplates(db, orgConfig.organizationId);
+
+        // Determine which reminders to create
+        let remindersToCreate: Array<{
+          type: ReminderType;
+          scheduledAt: Timestamp;
+          message: string;
+        }> = [];
+
+        if (reminderTemplates.length > 0) {
+          // Use custom templates
+          console.log(`Creating ${reminderTemplates.length} custom reminders for organization: ${orgConfig.organizationId}`);
+
+          remindersToCreate = reminderTemplates.map((template) => {
+            const scheduledAt = calculateReminderTime(
+              slotAt,
+              template.delayDays,
+              template.timeOfDay
+            );
+
+            // Replace variables in message
+            const message = template.message
+              .replace(/\{plan\}/g, body.plan)
+              .replace(/\{time\}/g, timezone.formatTimeOnly(slotAt));
+
+            return {
+              type: template.reminderType as ReminderType,
+              scheduledAt,
+              message,
+            };
+          });
+        } else {
+          // Fallback to default reminders (backward compatibility)
+          console.log(`Using default reminders for organization: ${orgConfig.organizationId}`);
+
+          const t24hTime = timezone.calculateT24hReminder(slotAt);
+          const dayOfTime = timezone.calculateDayOfReminder(slotAt);
+
+          remindersToCreate = [
+            {
+              type: 'T-24h',
+              scheduledAt: t24hTime,
+              message: messages.generateT24hReminderMessage(body.plan, slotAt),
+            },
+            {
+              type: 'day-of',
+              scheduledAt: dayOfTime,
+              message: messages.generateDayOfReminderMessage(body.plan, slotAt),
+            },
+          ];
+        }
+
+        // Check subscription limits
         let canCreateReminders = true;
         try {
-          const { canCreateReminder, incrementReminderCount } = await import('./utils/admin-firestore');
+          const { canCreateReminder } = await import('./utils/admin-firestore');
 
-          // We create 2 reminders per application (T-24h and day-of)
-          // Check if we have room for both
-          const canCreate = await canCreateReminder(orgConfig.organizationId);
-
-          if (!canCreate) {
-            console.warn(`Reminder limit reached for organization: ${orgConfig.organizationId}`);
-            canCreateReminders = false;
+          for (let i = 0; i < remindersToCreate.length; i++) {
+            const canCreate = await canCreateReminder(orgConfig.organizationId);
+            if (!canCreate) {
+              console.warn(`Reminder limit reached for organization: ${orgConfig.organizationId}. Created ${i}/${remindersToCreate.length} reminders.`);
+              remindersToCreate = remindersToCreate.slice(0, i);
+              break;
+            }
           }
         } catch (error) {
           console.warn('Reminder limit check failed, skipping reminders:', error);
           canCreateReminders = false;
         }
 
-        if (canCreateReminders) {
-          const t24hTime = timezone.calculateT24hReminder(slotAt);
-          const dayOfTime = timezone.calculateDayOfReminder(slotAt);
+        // Create reminders
+        if (canCreateReminders && remindersToCreate.length > 0) {
+          for (const reminder of remindersToCreate) {
+            await firestore.createReminder({
+              applicationId,
+              userId,
+              scheduledAt: reminder.scheduledAt,
+              type: reminder.type,
+              sentAt: null,
+              canceled: false,
+              message: reminder.message,
+              organizationId: orgConfig.organizationId,
+            });
+          }
 
-          // T-24h reminder
-          await firestore.createReminder({
-            applicationId,
-            userId,
-            scheduledAt: t24hTime,
-            type: 'T-24h',
-            sentAt: null,
-            canceled: false,
-            message: messages.generateT24hReminderMessage(body.plan, slotAt),
-            organizationId: orgConfig.organizationId,
-          });
-
-          // Day-of reminder (8 AM)
-          await firestore.createReminder({
-            applicationId,
-            userId,
-            scheduledAt: dayOfTime,
-            type: 'day-of',
-            sentAt: null,
-            canceled: false,
-            message: messages.generateDayOfReminderMessage(body.plan, slotAt),
-            organizationId: orgConfig.organizationId,
-          });
-
-          // Increment reminder count (we created 2 reminders)
+          // Increment reminder count
           try {
             const { incrementReminderCount } = await import('./utils/admin-firestore');
-            await incrementReminderCount(orgConfig.organizationId);
-            await incrementReminderCount(orgConfig.organizationId);
+            for (let i = 0; i < remindersToCreate.length; i++) {
+              await incrementReminderCount(orgConfig.organizationId);
+            }
           } catch (error) {
             console.warn('Failed to increment reminder count:', error);
           }
+
+          console.log(`Created ${remindersToCreate.length} reminders for application: ${applicationId}`);
         }
       }
 

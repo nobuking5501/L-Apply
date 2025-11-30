@@ -20,7 +20,9 @@ import { Bell, Clock, Save, Sparkles } from 'lucide-react';
 interface ReminderTemplate {
   id?: string;
   organizationId: string;
-  reminderType: 'T-24h' | 'day-of';
+  reminderType: string;
+  delayDays: number;      // How many days before the seminar
+  timeOfDay: string;      // Time of day to send (HH:mm format)
   message: string;
   isActive: boolean;
   createdAt: any;
@@ -35,6 +37,8 @@ export default function RemindersPage() {
   const [editingTemplate, setEditingTemplate] = useState<ReminderTemplate | null>(null);
   const [formData, setFormData] = useState<Omit<ReminderTemplate, 'id' | 'organizationId' | 'createdAt'>>({
     reminderType: 'T-24h',
+    delayDays: 1,
+    timeOfDay: '08:00',
     message: '',
     isActive: true,
   });
@@ -43,6 +47,8 @@ export default function RemindersPage() {
   const defaultMessages = [
     {
       reminderType: 'T-24h' as const,
+      delayDays: 1,
+      timeOfDay: '14:00',
       message: `⏰ 【リマインダー】明日{time}から開始です
 
 {plan}
@@ -58,6 +64,8 @@ https://us06web.zoom.us/j/87121074742?pwd=fkDi1VODGlqbs7jmseQFoI7FXhqqdd.1
     },
     {
       reminderType: 'day-of' as const,
+      delayDays: 0,
+      timeOfDay: '08:00',
       message: `🔔 【本日開催】{time}スタートです
 
 {plan}
@@ -135,6 +143,8 @@ https://us06web.zoom.us/j/87121074742?pwd=fkDi1VODGlqbs7jmseQFoI7FXhqqdd.1
     setEditingTemplate(template);
     setFormData({
       reminderType: template.reminderType,
+      delayDays: template.delayDays,
+      timeOfDay: template.timeOfDay,
       message: template.message,
       isActive: template.isActive,
     });
@@ -346,11 +356,53 @@ https://us06web.zoom.us/j/87121074742?pwd=fkDi1VODGlqbs7jmseQFoI7FXhqqdd.1
           </DialogHeader>
 
           <div className="space-y-4 py-4">
+            {/* Timing Settings */}
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="delayDays">何日前に送信</Label>
+                <input
+                  id="delayDays"
+                  type="number"
+                  min="0"
+                  max="30"
+                  className="w-full px-3 py-2 border rounded-md text-sm"
+                  value={formData.delayDays}
+                  onChange={(e) => setFormData({ ...formData, delayDays: parseInt(e.target.value) || 0 })}
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  0 = 当日、1 = 1日前、2 = 2日前...
+                </p>
+              </div>
+              <div>
+                <Label htmlFor="timeOfDay">送信時刻</Label>
+                <input
+                  id="timeOfDay"
+                  type="time"
+                  className="w-full px-3 py-2 border rounded-md text-sm"
+                  value={formData.timeOfDay}
+                  onChange={(e) => setFormData({ ...formData, timeOfDay: e.target.value })}
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  24時間形式（例: 14:00）
+                </p>
+              </div>
+            </div>
+
+            {/* Example */}
+            <div className="bg-blue-50 border border-blue-200 rounded-md p-3">
+              <p className="text-xs font-medium text-blue-900 mb-1">📌 送信タイミングの例</p>
+              <p className="text-xs text-blue-700">
+                {formData.delayDays === 0
+                  ? `セミナー当日の ${formData.timeOfDay} に送信`
+                  : `セミナーの ${formData.delayDays} 日前の ${formData.timeOfDay} に送信`}
+              </p>
+            </div>
+
             <div>
               <Label htmlFor="message">メッセージ内容</Label>
               <textarea
                 id="message"
-                rows={14}
+                rows={12}
                 className="w-full px-3 py-2 border rounded-md font-sans text-sm"
                 value={formData.message}
                 onChange={(e) => setFormData({ ...formData, message: e.target.value })}
