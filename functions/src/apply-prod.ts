@@ -235,7 +235,9 @@ export const apply = onRequest(
       }
 
       // Create step delivery schedule (after seminar date)
-      const stepDeliveries = stepDelivery.createStepDeliverySchedule(
+      const db = firestore.getDb();
+      const stepDeliveries = await stepDelivery.createStepDeliverySchedule(
+        db,
         applicationId,
         userId,
         slotAt,
@@ -260,7 +262,6 @@ export const apply = onRequest(
       }
 
       // Save step deliveries to Firestore (only allowed count)
-      const db = firestore.getDb();
       const batch = db.batch();
 
       for (let i = 0; i < allowedStepDeliveriesCount; i++) {
