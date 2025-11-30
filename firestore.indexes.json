@@ -23,7 +23,7 @@
       "queryScope": "COLLECTION",
       "fields": [
         {
-          "fieldPath": "scheduledAt",
+          "fieldPath": "canceled",
           "order": "ASCENDING"
         },
         {
@@ -31,7 +31,7 @@
           "order": "ASCENDING"
         },
         {
-          "fieldPath": "canceled",
+          "fieldPath": "scheduledAt",
           "order": "ASCENDING"
         }
       ]
