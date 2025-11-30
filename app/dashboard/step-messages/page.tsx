@@ -324,13 +324,7 @@ L-Applyへようこそ！
 📅 {datetime}
 
 【参加方法】
-以下のZoomリンクからご参加ください。
-
-🔗 Zoomリンク
-https://us06web.zoom.us/j/87121074742?pwd=fkDi1VODGlqbs7jmseQFoI7FXhqqdd.1
-
-ミーティングID: 871 2107 4742
-パスコード: 300798
+[参加方法をここに記載してください]
 
 ※前日と当日にリマインダーをお送りします。
 

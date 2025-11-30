@@ -59,11 +59,8 @@ export default function RemindersPage() {
 
 {plan}
 
-🔗 Zoomリンク
-https://us06web.zoom.us/j/87121074742?pwd=fkDi1VODGlqbs7jmseQFoI7FXhqqdd.1
-
-ミーティングID: 871 2107 4742
-パスコード: 300798
+🔗 参加方法
+[参加方法をここに記載してください]
 
 ご都合が悪い場合は「キャンセル」と返信ください。`,
     },
@@ -76,13 +73,10 @@ https://us06web.zoom.us/j/87121074742?pwd=fkDi1VODGlqbs7jmseQFoI7FXhqqdd.1
 
 {plan}
 
-🔗 Zoomリンク
-https://us06web.zoom.us/j/87121074742?pwd=fkDi1VODGlqbs7jmseQFoI7FXhqqdd.1
+🔗 参加方法
+[参加方法をここに記載してください]
 
-ミーティングID: 871 2107 4742
-パスコード: 300798
-
-5分前にはZoomに接続してご準備をお願いします！`,
+5分前には準備をお願いします！`,
     },
     {
       id: 'day-of-1hour',
@@ -95,8 +89,8 @@ https://us06web.zoom.us/j/87121074742?pwd=fkDi1VODGlqbs7jmseQFoI7FXhqqdd.1
 
 開始時刻: {time}
 
-🔗 Zoomリンク
-https://us06web.zoom.us/j/87121074742?pwd=fkDi1VODGlqbs7jmseQFoI7FXhqqdd.1
+🔗 参加方法
+[参加方法をここに記載してください]
 
 準備をお願いします！`,
     },
@@ -160,11 +154,8 @@ https://us06web.zoom.us/j/87121074742?pwd=fkDi1VODGlqbs7jmseQFoI7FXhqqdd.1
 
 {plan}
 
-🔗 Zoomリンク
-https://us06web.zoom.us/j/87121074742?pwd=fkDi1VODGlqbs7jmseQFoI7FXhqqdd.1
-
-ミーティングID: 871 2107 4742
-パスコード: 300798
+🔗 参加方法
+[参加方法をここに記載してください]
 
 ご都合が悪い場合は「キャンセル」と返信ください。`,
       isActive: true,
@@ -177,13 +168,10 @@ https://us06web.zoom.us/j/87121074742?pwd=fkDi1VODGlqbs7jmseQFoI7FXhqqdd.1
 
 {plan}
 
-🔗 Zoomリンク
-https://us06web.zoom.us/j/87121074742?pwd=fkDi1VODGlqbs7jmseQFoI7FXhqqdd.1
+🔗 参加方法
+[参加方法をここに記載してください]
 
-ミーティングID: 871 2107 4742
-パスコード: 300798
-
-5分前にはZoomに接続してご準備をお願いします！`,
+5分前には準備をお願いします！`,
       isActive: true,
     },
   ];
