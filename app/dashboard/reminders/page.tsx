@@ -1,11 +1,12 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { collection, query, where, getDocs, doc, setDoc, deleteDoc } from 'firebase/firestore';
+import { collection, query, where, getDocs, getDoc, doc, setDoc, deleteDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { useAuth } from '@/contexts/AuthContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
   Dialog,
@@ -15,14 +16,14 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { Bell, Clock, Save, Sparkles } from 'lucide-react';
+import { Plus, Save, Bell, Clock, Trash2, Sparkles } from 'lucide-react';
 
 interface ReminderTemplate {
   id?: string;
   organizationId: string;
   reminderType: string;
-  delayDays: number;      // How many days before the seminar
-  timeOfDay: string;      // Time of day to send (HH:mm format)
+  delayDays: number;
+  timeOfDay: string; // Format: "HH:mm"
   message: string;
   isActive: boolean;
   createdAt: any;
@@ -35,18 +36,124 @@ export default function RemindersPage() {
   const [templates, setTemplates] = useState<ReminderTemplate[]>([]);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingTemplate, setEditingTemplate] = useState<ReminderTemplate | null>(null);
-  const [formData, setFormData] = useState<Omit<ReminderTemplate, 'id' | 'organizationId' | 'createdAt'>>({
-    reminderType: 'T-24h',
+
+  const emptyTemplate: Omit<ReminderTemplate, 'id' | 'organizationId' | 'createdAt'> = {
+    reminderType: 'custom',
     delayDays: 1,
-    timeOfDay: '08:00',
+    timeOfDay: '09:00',
     message: '',
     isActive: true,
-  });
+  };
 
-  // デフォルトのリマインダーメッセージ
-  const defaultMessages = [
+  const [formData, setFormData] = useState(emptyTemplate);
+  const [selectedTemplate, setSelectedTemplate] = useState<string>('');
+
+  // メッセージテンプレート（ひな形）
+  const messageTemplates = [
     {
-      reminderType: 'T-24h' as const,
+      id: 't-24h',
+      name: 'T-24h リマインダー（24時間前）',
+      delayDays: 1,
+      timeOfDay: '14:00',
+      message: `⏰ 【リマインダー】明日{time}から開始です
+
+{plan}
+
+🔗 Zoomリンク
+https://us06web.zoom.us/j/87121074742?pwd=fkDi1VODGlqbs7jmseQFoI7FXhqqdd.1
+
+ミーティングID: 871 2107 4742
+パスコード: 300798
+
+ご都合が悪い場合は「キャンセル」と返信ください。`,
+    },
+    {
+      id: 'day-of-morning',
+      name: '当日朝リマインダー（朝8時）',
+      delayDays: 0,
+      timeOfDay: '08:00',
+      message: `🔔 【本日開催】{time}スタートです
+
+{plan}
+
+🔗 Zoomリンク
+https://us06web.zoom.us/j/87121074742?pwd=fkDi1VODGlqbs7jmseQFoI7FXhqqdd.1
+
+ミーティングID: 871 2107 4742
+パスコード: 300798
+
+5分前にはZoomに接続してご準備をお願いします！`,
+    },
+    {
+      id: 'day-of-1hour',
+      name: '当日1時間前リマインダー',
+      delayDays: 0,
+      timeOfDay: '13:00', // 14:00開始の1時間前を想定
+      message: `⏰ あと1時間で開始です！
+
+{plan}
+
+開始時刻: {time}
+
+🔗 Zoomリンク
+https://us06web.zoom.us/j/87121074742?pwd=fkDi1VODGlqbs7jmseQFoI7FXhqqdd.1
+
+準備をお願いします！`,
+    },
+    {
+      id: 't-3days',
+      name: '3日前リマインダー',
+      delayDays: 3,
+      timeOfDay: '10:00',
+      message: `📅 3日後のイベントのお知らせ
+
+{plan}
+
+📅 日時: {time}開始
+
+イベントを楽しみにお待ちください！
+
+参加方法の詳細は、前日にお送りします。`,
+    },
+    {
+      id: 't-7days',
+      name: '1週間前リマインダー',
+      delayDays: 7,
+      timeOfDay: '10:00',
+      message: `📢 来週のイベントのご案内
+
+{plan}
+
+📅 日時: {time}開始
+
+ご予定の確認をお願いします。
+
+当日お会いできることを楽しみにしております！`,
+    },
+    {
+      id: 'preparation',
+      name: '事前準備リマインダー',
+      delayDays: 2,
+      timeOfDay: '18:00',
+      message: `📝 【事前準備のお願い】
+
+{plan}
+
+開催日時: {time}
+
+【事前にご準備いただきたいこと】
+✅ Zoomのインストール・動作確認
+✅ 静かな環境の確保
+✅ メモ・筆記用具の準備
+
+当日スムーズにご参加いただけるよう、ご準備をお願いいたします。`,
+    },
+  ];
+
+  // デフォルトのリマインダー設定
+  const defaultReminders = [
+    {
+      reminderType: 'T-24h',
       delayDays: 1,
       timeOfDay: '14:00',
       message: `⏰ 【リマインダー】明日{time}から開始です
@@ -63,7 +170,7 @@ https://us06web.zoom.us/j/87121074742?pwd=fkDi1VODGlqbs7jmseQFoI7FXhqqdd.1
       isActive: true,
     },
     {
-      reminderType: 'day-of' as const,
+      reminderType: 'day-of',
       delayDays: 0,
       timeOfDay: '08:00',
       message: `🔔 【本日開催】{time}スタートです
@@ -81,6 +188,31 @@ https://us06web.zoom.us/j/87121074742?pwd=fkDi1VODGlqbs7jmseQFoI7FXhqqdd.1
     },
   ];
 
+  const handleImportDefaults = async () => {
+    if (!userData?.organizationId) return;
+    if (!confirm('デフォルトのリマインダー設定をインポートしますか？\n既存の設定は削除されません。')) {
+      return;
+    }
+
+    try {
+      for (const reminder of defaultReminders) {
+        const templateData: ReminderTemplate = {
+          ...reminder,
+          organizationId: userData.organizationId,
+          createdAt: new Date(),
+        };
+        const newDocRef = doc(collection(db, 'reminder_message_templates'));
+        await setDoc(newDocRef, templateData);
+      }
+
+      fetchTemplates();
+      alert('デフォルトリマインダーをインポートしました');
+    } catch (error) {
+      console.error('Error importing defaults:', error);
+      alert('インポートに失敗しました');
+    }
+  };
+
   const fetchTemplates = async () => {
     if (!userData?.organizationId) return;
 
@@ -95,12 +227,8 @@ https://us06web.zoom.us/j/87121074742?pwd=fkDi1VODGlqbs7jmseQFoI7FXhqqdd.1
         ...doc.data(),
       })) as ReminderTemplate[];
 
-      // Sort: T-24h first, then day-of
-      templatesData.sort((a, b) => {
-        if (a.reminderType === 'T-24h' && b.reminderType === 'day-of') return -1;
-        if (a.reminderType === 'day-of' && b.reminderType === 'T-24h') return 1;
-        return 0;
-      });
+      // ソート: delayDays降順（日数が多い順）
+      templatesData.sort((a, b) => b.delayDays - a.delayDays);
 
       setTemplates(templatesData);
     } catch (error) {
@@ -114,63 +242,106 @@ https://us06web.zoom.us/j/87121074742?pwd=fkDi1VODGlqbs7jmseQFoI7FXhqqdd.1
     fetchTemplates();
   }, [userData]);
 
-  const handleImportDefaults = async () => {
-    if (!userData?.organizationId) return;
-    if (!confirm('デフォルトのリマインダーメッセージをインポートしますか？')) {
-      return;
+  const handleOpenDialog = (template?: ReminderTemplate) => {
+    if (template) {
+      setEditingTemplate(template);
+      setFormData({
+        reminderType: template.reminderType,
+        delayDays: template.delayDays,
+        timeOfDay: template.timeOfDay,
+        message: template.message,
+        isActive: template.isActive,
+      });
+    } else {
+      setEditingTemplate(null);
+      setFormData(emptyTemplate);
     }
-
-    try {
-      for (const msg of defaultMessages) {
-        const templateData: ReminderTemplate = {
-          ...msg,
-          organizationId: userData.organizationId,
-          createdAt: new Date(),
-        };
-        const newDocRef = doc(collection(db, 'reminder_message_templates'));
-        await setDoc(newDocRef, templateData);
-      }
-
-      fetchTemplates();
-      alert('デフォルトメッセージをインポートしました');
-    } catch (error) {
-      console.error('Error importing defaults:', error);
-      alert('インポートに失敗しました');
-    }
-  };
-
-  const handleOpenDialog = (template: ReminderTemplate) => {
-    setEditingTemplate(template);
-    setFormData({
-      reminderType: template.reminderType,
-      delayDays: template.delayDays,
-      timeOfDay: template.timeOfDay,
-      message: template.message,
-      isActive: template.isActive,
-    });
+    setSelectedTemplate('');
     setDialogOpen(true);
   };
 
+  const handleTemplateSelect = (templateId: string) => {
+    setSelectedTemplate(templateId);
+
+    const template = messageTemplates.find((t) => t.id === templateId);
+
+    if (template) {
+      setFormData({
+        ...formData,
+        delayDays: template.delayDays,
+        timeOfDay: template.timeOfDay,
+        message: template.message,
+      });
+    }
+  };
+
   const handleSave = async () => {
-    if (!userData?.organizationId || !editingTemplate?.id) return;
+    if (!userData?.organizationId) return;
+
+    // サブスクリプション制限のチェック（新規作成時のみ）
+    if (!editingTemplate?.id) {
+      try {
+        const orgDoc = await getDoc(doc(db, 'organizations', userData.organizationId));
+        if (!orgDoc.exists()) {
+          alert('組織情報が見つかりません');
+          return;
+        }
+
+        const orgData = orgDoc.data();
+        const subscription = orgData.subscription || {
+          limits: { maxReminders: 3 },
+        };
+
+        // 現在のリマインダー数をカウント
+        const currentRemindersCount = templates.length;
+
+        if (currentRemindersCount >= subscription.limits.maxReminders) {
+          alert(
+            `リマインダー数の上限（${subscription.limits.maxReminders}件）に達しています。\n\nプランをアップグレードするには、サイドバーの「サブスクリプション」をご確認ください。`
+          );
+          return;
+        }
+      } catch (error) {
+        console.error('Error checking subscription limits:', error);
+        alert('サブスクリプション情報の確認に失敗しました');
+        return;
+      }
+    }
 
     try {
       const templateData: ReminderTemplate = {
         ...formData,
         organizationId: userData.organizationId,
-        createdAt: editingTemplate.createdAt,
+        createdAt: editingTemplate?.createdAt || new Date(),
         updatedAt: new Date(),
       };
 
-      await setDoc(doc(db, 'reminder_message_templates', editingTemplate.id), templateData);
+      if (editingTemplate?.id) {
+        await setDoc(doc(db, 'reminder_message_templates', editingTemplate.id), templateData);
+      } else {
+        const newDocRef = doc(collection(db, 'reminder_message_templates'));
+        await setDoc(newDocRef, templateData);
+      }
 
       fetchTemplates();
       setDialogOpen(false);
       setEditingTemplate(null);
-      alert('保存しました');
+      setFormData(emptyTemplate);
     } catch (error) {
       console.error('Error saving template:', error);
       alert('保存に失敗しました');
+    }
+  };
+
+  const handleDelete = async (templateId: string) => {
+    if (!confirm('このリマインダーを削除しますか？')) return;
+
+    try {
+      await deleteDoc(doc(db, 'reminder_message_templates', templateId));
+      fetchTemplates();
+    } catch (error) {
+      console.error('Error deleting template:', error);
+      alert('削除に失敗しました');
     }
   };
 
@@ -185,9 +356,6 @@ https://us06web.zoom.us/j/87121074742?pwd=fkDi1VODGlqbs7jmseQFoI7FXhqqdd.1
     );
   }
 
-  const t24hTemplate = templates.find((t) => t.reminderType === 'T-24h');
-  const dayOfTemplate = templates.find((t) => t.reminderType === 'day-of');
-
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -195,152 +363,114 @@ https://us06web.zoom.us/j/87121074742?pwd=fkDi1VODGlqbs7jmseQFoI7FXhqqdd.1
         <div>
           <h2 className="text-2xl font-bold text-gray-900">リマインダー設定</h2>
           <p className="text-sm text-gray-600 mt-1">
-            セミナー前に送信されるリマインダーメッセージを設定できます
+            カードをクリックして編集できます
           </p>
         </div>
-        {templates.length === 0 && (
-          <Button variant="outline" onClick={handleImportDefaults}>
-            <Sparkles className="h-4 w-4 mr-2" />
-            デフォルトをインポート
+        <div className="flex space-x-2">
+          {templates.length === 0 && (
+            <Button variant="outline" onClick={handleImportDefaults}>
+              <Sparkles className="h-4 w-4 mr-2" />
+              デフォルトをインポート
+            </Button>
+          )}
+          <Button onClick={() => handleOpenDialog()}>
+            <Plus className="h-4 w-4 mr-2" />
+            リマインダーを追加
           </Button>
-        )}
+        </div>
       </div>
 
-      {/* T-24h Reminder */}
+      {/* リマインダー一覧 */}
       <div>
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center space-x-2">
-            <Clock className="h-5 w-5 text-blue-600" />
-            <h3 className="text-lg font-semibold text-gray-900">T-24hリマインダー</h3>
-          </div>
-          <p className="text-sm text-gray-600">セミナー24時間前に送信</p>
+        <div className="flex items-center space-x-2 mb-4">
+          <Bell className="h-5 w-5 text-blue-600" />
+          <h3 className="text-lg font-semibold text-gray-900">設定済みリマインダー</h3>
         </div>
 
-        {!t24hTemplate ? (
-          <Card className="border-dashed">
-            <CardContent className="p-8 text-center">
-              <Clock className="h-12 w-12 text-gray-300 mx-auto mb-3" />
-              <h4 className="text-base font-medium text-gray-900 mb-1">
-                リマインダーメッセージを設定
-              </h4>
-              <p className="text-sm text-gray-500 mb-4">
-                「デフォルトをインポート」ボタンでメッセージを作成できます
-              </p>
-            </CardContent>
-          </Card>
-        ) : (
+        {templates.length === 0 ? (
           <Card
-            className="cursor-pointer hover:border-blue-400 hover:shadow-md transition-all"
-            onClick={() => handleOpenDialog(t24hTemplate)}
+            className="cursor-pointer hover:border-blue-400 hover:shadow-md transition-all border-dashed"
+            onClick={() => handleOpenDialog()}
           >
-            <CardContent className="p-6">
-              <div className="flex items-start justify-between mb-3">
-                <div className="flex items-center space-x-2">
-                  <div className="h-10 w-10 bg-blue-100 rounded-full flex items-center justify-center">
-                    <Clock className="h-5 w-5 text-blue-600" />
-                  </div>
-                  <div>
-                    <h4 className="font-semibold text-gray-900">24時間前</h4>
-                    <p className="text-xs text-gray-500">セミナー開始の24時間前に送信</p>
-                  </div>
-                </div>
-                <div className="flex items-center space-x-2">
-                  {!t24hTemplate.isActive && (
-                    <span className="text-xs px-2 py-1 bg-gray-100 text-gray-600 rounded-full">
-                      無効
-                    </span>
-                  )}
-                  {t24hTemplate.isActive && (
-                    <span className="text-xs px-2 py-1 bg-green-100 text-green-600 rounded-full">
-                      有効
-                    </span>
-                  )}
-                </div>
-              </div>
-              <div className="bg-gray-50 rounded-lg p-4 max-h-32 overflow-hidden">
-                <pre className="text-sm text-gray-700 whitespace-pre-wrap font-sans line-clamp-4">
-                  {t24hTemplate.message}
-                </pre>
-              </div>
-              <div className="mt-3 flex items-center justify-between">
-                <div className="text-xs text-gray-500 space-y-1">
-                  <p>使用可能な変数:</p>
-                  <p className="font-mono">{'{plan}'} = プラン名</p>
-                  <p className="font-mono">{'{time}'} = 時刻</p>
-                </div>
-                <span className="text-xs text-blue-600">クリックして編集 →</span>
-              </div>
-            </CardContent>
-          </Card>
-        )}
-      </div>
-
-      {/* Day-of Reminder */}
-      <div>
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center space-x-2">
-            <Bell className="h-5 w-5 text-green-600" />
-            <h3 className="text-lg font-semibold text-gray-900">当日朝リマインダー</h3>
-          </div>
-          <p className="text-sm text-gray-600">セミナー当日朝8時に送信</p>
-        </div>
-
-        {!dayOfTemplate ? (
-          <Card className="border-dashed">
             <CardContent className="p-8 text-center">
               <Bell className="h-12 w-12 text-gray-300 mx-auto mb-3" />
               <h4 className="text-base font-medium text-gray-900 mb-1">
-                リマインダーメッセージを設定
+                リマインダーを設定
               </h4>
-              <p className="text-sm text-gray-500 mb-4">
-                「デフォルトをインポート」ボタンでメッセージを作成できます
+              <p className="text-sm text-gray-500 mb-2">
+                クリックして設定する
+              </p>
+              <p className="text-xs text-gray-400">
+                セミナー前に参加者へリマインド通知を送信
               </p>
             </CardContent>
           </Card>
         ) : (
-          <Card
-            className="cursor-pointer hover:border-green-400 hover:shadow-md transition-all"
-            onClick={() => handleOpenDialog(dayOfTemplate)}
-          >
-            <CardContent className="p-6">
-              <div className="flex items-start justify-between mb-3">
-                <div className="flex items-center space-x-2">
-                  <div className="h-10 w-10 bg-green-100 rounded-full flex items-center justify-center">
-                    <Bell className="h-5 w-5 text-green-600" />
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {templates.map((template) => (
+              <Card
+                key={template.id}
+                className="cursor-pointer hover:border-blue-400 hover:shadow-md transition-all"
+                onClick={() => handleOpenDialog(template)}
+              >
+                <CardContent className="p-5">
+                  <div className="flex items-start justify-between mb-3">
+                    <div className="flex items-center space-x-2">
+                      <div className="h-10 w-10 bg-blue-100 rounded-full flex items-center justify-center">
+                        <Clock className="h-5 w-5 text-blue-600" />
+                      </div>
+                      <div>
+                        <h4 className="font-semibold text-gray-900">
+                          {template.delayDays === 0
+                            ? `当日 ${template.timeOfDay}`
+                            : `${template.delayDays}日前 ${template.timeOfDay}`}
+                        </h4>
+                        <p className="text-xs text-gray-500">
+                          {template.reminderType === 'T-24h' && 'T-24h リマインダー'}
+                          {template.reminderType === 'day-of' && '当日リマインダー'}
+                          {template.reminderType === 'custom' && 'カスタムリマインダー'}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      {!template.isActive && (
+                        <span className="text-xs px-2 py-1 bg-gray-100 text-gray-600 rounded-full">
+                          無効
+                        </span>
+                      )}
+                      {template.isActive && (
+                        <span className="text-xs px-2 py-1 bg-green-100 text-green-600 rounded-full">
+                          有効
+                        </span>
+                      )}
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDelete(template.id!);
+                        }}
+                        className="h-7 w-7 p-0"
+                      >
+                        <Trash2 className="h-3 w-3 text-gray-400" />
+                      </Button>
+                    </div>
                   </div>
-                  <div>
-                    <h4 className="font-semibold text-gray-900">当日朝8時</h4>
-                    <p className="text-xs text-gray-500">セミナー当日の朝8時に送信</p>
+                  <div className="bg-gray-50 rounded-lg p-3 max-h-24 overflow-hidden">
+                    <pre className="text-xs text-gray-700 whitespace-pre-wrap font-sans line-clamp-3">
+                      {template.message}
+                    </pre>
                   </div>
-                </div>
-                <div className="flex items-center space-x-2">
-                  {!dayOfTemplate.isActive && (
-                    <span className="text-xs px-2 py-1 bg-gray-100 text-gray-600 rounded-full">
-                      無効
-                    </span>
-                  )}
-                  {dayOfTemplate.isActive && (
-                    <span className="text-xs px-2 py-1 bg-green-100 text-green-600 rounded-full">
-                      有効
-                    </span>
-                  )}
-                </div>
-              </div>
-              <div className="bg-gray-50 rounded-lg p-4 max-h-32 overflow-hidden">
-                <pre className="text-sm text-gray-700 whitespace-pre-wrap font-sans line-clamp-4">
-                  {dayOfTemplate.message}
-                </pre>
-              </div>
-              <div className="mt-3 flex items-center justify-between">
-                <div className="text-xs text-gray-500 space-y-1">
-                  <p>使用可能な変数:</p>
-                  <p className="font-mono">{'{plan}'} = プラン名</p>
-                  <p className="font-mono">{'{time}'} = 時刻</p>
-                </div>
-                <span className="text-xs text-green-600">クリックして編集 →</span>
-              </div>
-            </CardContent>
-          </Card>
+                  <div className="mt-3 flex items-center justify-between">
+                    <div className="bg-blue-50 px-2 py-1 rounded text-xs text-blue-700">
+                      📅 セミナーの{template.delayDays === 0 ? '当日' : `${template.delayDays}日前`}の {template.timeOfDay} に送信
+                    </div>
+                    <span className="text-xs text-blue-600">編集 →</span>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
         )}
       </div>
 
@@ -348,26 +478,48 @@ https://us06web.zoom.us/j/87121074742?pwd=fkDi1VODGlqbs7jmseQFoI7FXhqqdd.1
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>リマインダーメッセージを編集</DialogTitle>
+            <DialogTitle>
+              {editingTemplate ? 'リマインダーを編集' : 'リマインダーを作成'}
+            </DialogTitle>
             <DialogDescription>
-              {formData.reminderType === 'T-24h' && 'セミナー開始の24時間前に送信されます'}
-              {formData.reminderType === 'day-of' && 'セミナー当日の朝8時に送信されます'}
+              セミナー開催前に参加者へリマインド通知を送信します（変数: {'{plan}'}, {'{time}'}）
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4 py-4">
-            {/* Timing Settings */}
+            {/* テンプレート選択 */}
+            <div>
+              <Label htmlFor="template">メッセージテンプレート</Label>
+              <select
+                id="template"
+                value={selectedTemplate}
+                onChange={(e) => handleTemplateSelect(e.target.value)}
+                className="w-full px-3 py-2 border rounded-md text-sm"
+              >
+                <option value="">-- ひな形を選択 --</option>
+                {messageTemplates.map((template) => (
+                  <option key={template.id} value={template.id}>
+                    {template.name}
+                  </option>
+                ))}
+              </select>
+              <p className="text-xs text-gray-500 mt-1">
+                ひな形を選択すると、日数・時刻・メッセージ欄に自動入力されます
+              </p>
+            </div>
+
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <Label htmlFor="delayDays">何日前に送信</Label>
-                <input
+                <Input
                   id="delayDays"
                   type="number"
                   min="0"
                   max="30"
-                  className="w-full px-3 py-2 border rounded-md text-sm"
                   value={formData.delayDays}
-                  onChange={(e) => setFormData({ ...formData, delayDays: parseInt(e.target.value) || 0 })}
+                  onChange={(e) =>
+                    setFormData({ ...formData, delayDays: parseInt(e.target.value) || 0 })
+                  }
                 />
                 <p className="text-xs text-gray-500 mt-1">
                   0 = 当日、1 = 1日前、2 = 2日前...
@@ -375,10 +527,9 @@ https://us06web.zoom.us/j/87121074742?pwd=fkDi1VODGlqbs7jmseQFoI7FXhqqdd.1
               </div>
               <div>
                 <Label htmlFor="timeOfDay">送信時刻</Label>
-                <input
+                <Input
                   id="timeOfDay"
                   type="time"
-                  className="w-full px-3 py-2 border rounded-md text-sm"
                   value={formData.timeOfDay}
                   onChange={(e) => setFormData({ ...formData, timeOfDay: e.target.value })}
                 />
@@ -388,7 +539,7 @@ https://us06web.zoom.us/j/87121074742?pwd=fkDi1VODGlqbs7jmseQFoI7FXhqqdd.1
               </div>
             </div>
 
-            {/* Example */}
+            {/* 送信タイミングのプレビュー */}
             <div className="bg-blue-50 border border-blue-200 rounded-md p-3">
               <p className="text-xs font-medium text-blue-900 mb-1">📌 送信タイミングの例</p>
               <p className="text-xs text-blue-700">
@@ -396,21 +547,31 @@ https://us06web.zoom.us/j/87121074742?pwd=fkDi1VODGlqbs7jmseQFoI7FXhqqdd.1
                   ? `セミナー当日の ${formData.timeOfDay} に送信`
                   : `セミナーの ${formData.delayDays} 日前の ${formData.timeOfDay} に送信`}
               </p>
+              <p className="text-xs text-blue-600 mt-1">
+                例: 2025年12月10日 14:00のセミナー →{' '}
+                {formData.delayDays === 0
+                  ? `2025年12月10日 ${formData.timeOfDay}`
+                  : `2025年12月${10 - formData.delayDays}日 ${formData.timeOfDay}`}
+                に送信
+              </p>
             </div>
 
             <div>
               <Label htmlFor="message">メッセージ内容</Label>
               <textarea
                 id="message"
-                rows={12}
+                rows={14}
                 className="w-full px-3 py-2 border rounded-md font-sans text-sm"
                 value={formData.message}
                 onChange={(e) => setFormData({ ...formData, message: e.target.value })}
                 placeholder="ここにメッセージを入力してください..."
               />
-              <p className="text-xs text-gray-500 mt-1">
-                使用可能な変数: {'{plan}'}, {'{time}'}
-              </p>
+              <div className="text-xs text-gray-500 mt-1 space-y-1">
+                <p>改行や絵文字も使用できます</p>
+                <p className="font-medium">使用可能な変数:</p>
+                <p className="font-mono">{'{plan}'} = プラン名</p>
+                <p className="font-mono">{'{time}'} = セミナー開始時刻</p>
+              </div>
             </div>
 
             <div className="flex items-center space-x-2">
