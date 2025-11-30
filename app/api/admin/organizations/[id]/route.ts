@@ -44,7 +44,7 @@ export async function GET(
       );
     }
 
-    const { getOrganizationAdmin } = await import('@/functions/src/utils/admin-firestore');
+    const { getOrganizationAdmin } = await import('@/lib/admin-firestore');
 
     const organization = await getOrganizationAdmin(params.id);
 
@@ -91,7 +91,7 @@ export async function PATCH(
       updateOrganizationPlan,
       updateOrganizationStatus,
       getOrganizationAdmin,
-    } = await import('@/functions/src/utils/admin-firestore');
+    } = await import('@/lib/admin-firestore');
 
     // Update plan if provided
     if (plan) {

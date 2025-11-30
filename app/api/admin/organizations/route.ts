@@ -42,7 +42,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Import admin functions dynamically to avoid cold start issues
-    const { getAllOrganizations } = await import('@/functions/src/utils/admin-firestore');
+    const { getAllOrganizations } = await import('@/lib/admin-firestore');
 
     const organizations = await getAllOrganizations();
 

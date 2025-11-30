@@ -19,7 +19,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Import admin functions dynamically
-    const { getAdminStats } = await import('@/functions/src/utils/admin-firestore');
+    const { getAdminStats } = await import('@/lib/admin-firestore');
 
     const stats = await getAdminStats();
 

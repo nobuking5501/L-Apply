@@ -26,9 +26,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Import admin functions
+    // Import admin functions from lib
     const { initializeOrganizationSubscription, getOrganizationAdmin } =
-      await import('@/functions/src/utils/admin-firestore');
+      await import('@/lib/admin-firestore');
 
     // Initialize subscription
     await initializeOrganizationSubscription(organizationId);
