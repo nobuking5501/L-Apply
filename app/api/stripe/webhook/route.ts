@@ -23,13 +23,6 @@ if (getApps().length === 0) {
 
 const db = getFirestore();
 
-// Disable body parsing, need raw body for webhook verification
-export const config = {
-  api: {
-    bodyParser: false,
-  },
-};
-
 async function getRawBody(request: NextRequest): Promise<Buffer> {
   const chunks: Uint8Array[] = [];
   const reader = request.body?.getReader();
@@ -192,13 +185,16 @@ async function handleSubscriptionUpdated(subscription: Stripe.Subscription) {
                    subscription.status === 'past_due' ? 'past_due' :
                    subscription.status === 'canceled' ? 'canceled' : 'trial';
 
+    // Type assertion for period timestamps
+    const sub = subscription as any;
+
     await updateDoc(orgRef, {
       'subscription.status': status,
       'subscription.currentPeriodStart': Timestamp.fromDate(
-        new Date(subscription.current_period_start * 1000)
+        new Date(sub.current_period_start * 1000)
       ),
       'subscription.currentPeriodEnd': Timestamp.fromDate(
-        new Date(subscription.current_period_end * 1000)
+        new Date(sub.current_period_end * 1000)
       ),
       updatedAt: Timestamp.now(),
     });
@@ -242,7 +238,9 @@ async function handleSubscriptionDeleted(subscription: Stripe.Subscription) {
 }
 
 async function handlePaymentSucceeded(invoice: Stripe.Invoice) {
-  const subscription = invoice.subscription as string;
+  // Type assertion for invoice subscription
+  const inv = invoice as any;
+  const subscription = inv.subscription as string;
 
   if (!subscription) {
     return;
@@ -253,7 +251,9 @@ async function handlePaymentSucceeded(invoice: Stripe.Invoice) {
 }
 
 async function handlePaymentFailed(invoice: Stripe.Invoice) {
-  const subscription = invoice.subscription as string;
+  // Type assertion for invoice subscription
+  const inv = invoice as any;
+  const subscription = inv.subscription as string;
 
   if (!subscription) {
     return;
