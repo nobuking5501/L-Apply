@@ -4,6 +4,7 @@ import { ensureFirebaseInitialized } from './utils/firebase-init';
 import * as firestore from './utils/firestore';
 import * as messages from './utils/messages';
 import * as stepDelivery from './utils/step-delivery';
+import { getOrganizationConfig } from './config';
 
 // LINE Webhook Event types
 interface WebhookEvent {
@@ -16,6 +17,40 @@ interface WebhookEvent {
   source: {
     userId?: string;
   };
+}
+
+/**
+ * Verify signature and identify which organization the webhook is from
+ * @param body Request body as string
+ * @param signature X-LINE-Signature header value
+ * @returns organizationId if verification succeeds, null otherwise
+ */
+async function verifySignatureAndGetOrganization(
+  body: string,
+  signature: string
+): Promise<string | null> {
+  ensureFirebaseInitialized();
+  const db = firestore.getDb();
+
+  // Get all organizations
+  const orgsSnapshot = await db.collection('organizations').get();
+
+  // Try to verify signature with each organization's channelSecret
+  for (const orgDoc of orgsSnapshot.docs) {
+    const orgData = orgDoc.data();
+    const channelSecret = orgData.lineChannelSecret;
+
+    if (!channelSecret) {
+      continue;
+    }
+
+    // Verify signature with this organization's secret
+    if (verifySignature(body, signature, channelSecret)) {
+      return orgDoc.id;
+    }
+  }
+
+  return null;
 }
 
 export const webhook = onRequest(
@@ -37,19 +72,25 @@ export const webhook = onRequest(
     }
 
     const body = JSON.stringify(req.body);
-    if (!verifySignature(body, signature)) {
+
+    // Verify signature and identify organization
+    const organizationId = await verifySignatureAndGetOrganization(body, signature);
+    if (!organizationId) {
+      console.error('Invalid signature - no matching organization found');
       res.status(401).send('Invalid signature');
       return;
     }
+
+    console.log(`Webhook request from organization: ${organizationId}`);
 
     try {
       const events: WebhookEvent[] = req.body.events;
 
       for (const event of events) {
         if (event.type === 'message' && event.message?.type === 'text') {
-          await handleTextMessage(event);
+          await handleTextMessage(event, organizationId);
         } else if (event.type === 'follow') {
-          await handleFollowEvent(event);
+          await handleFollowEvent(event, organizationId);
         }
       }
 
@@ -61,7 +102,7 @@ export const webhook = onRequest(
   }
 );
 
-async function handleTextMessage(event: WebhookEvent): Promise<void> {
+async function handleTextMessage(event: WebhookEvent, organizationId: string): Promise<void> {
   if (event.message?.type !== 'text') {
     return;
   }
@@ -78,6 +119,9 @@ async function handleTextMessage(event: WebhookEvent): Promise<void> {
     // Initialize Firebase
     ensureFirebaseInitialized();
 
+    // Get organization config
+    const orgConfig = await getOrganizationConfig(organizationId);
+
     // Get Firestore instance
     const db = firestore.getDb();
 
@@ -89,27 +133,27 @@ async function handleTextMessage(event: WebhookEvent): Promise<void> {
       await stepDelivery.skipAllStepDeliveriesForUser(db, userId);
 
       const message = messages.generateConsentUpdateMessage(false);
-      await replyMessage(replyToken, [createTextMessage(message)]);
+      await replyMessage(replyToken, [createTextMessage(message)], orgConfig.line.channelAccessToken);
     } else if (text === '再開' || text === '停止解除') {
       await firestore.updateUserConsent(userId, true);
       const message = messages.generateConsentUpdateMessage(true);
-      await replyMessage(replyToken, [createTextMessage(message)]);
+      await replyMessage(replyToken, [createTextMessage(message)], orgConfig.line.channelAccessToken);
     } else if (text === '予約確認') {
       const application = await firestore.getLatestApplication(userId);
 
       if (!application) {
         const message = messages.generateNoReservationMessage();
-        await replyMessage(replyToken, [createTextMessage(message)]);
+        await replyMessage(replyToken, [createTextMessage(message)], orgConfig.line.channelAccessToken);
       } else {
         const message = messages.generateReservationConfirmationMessage(application.plan, application.slotAt);
-        await replyMessage(replyToken, [createTextMessage(message)]);
+        await replyMessage(replyToken, [createTextMessage(message)], orgConfig.line.channelAccessToken);
       }
     } else if (text === 'キャンセル') {
       const application = await firestore.getLatestApplication(userId);
 
       if (!application) {
         const message = messages.generateNoReservationMessage();
-        await replyMessage(replyToken, [createTextMessage(message)]);
+        await replyMessage(replyToken, [createTextMessage(message)], orgConfig.line.channelAccessToken);
       } else {
         // Cancel application
         await firestore.cancelApplication(application.id!);
@@ -121,16 +165,15 @@ async function handleTextMessage(event: WebhookEvent): Promise<void> {
         await stepDelivery.skipAllStepDeliveriesForApplication(db, application.id!);
 
         const message = messages.generateCancellationMessage(application.slotAt);
-        await replyMessage(replyToken, [createTextMessage(message)]);
+        await replyMessage(replyToken, [createTextMessage(message)], orgConfig.line.channelAccessToken);
       }
     } else {
       // Check for auto-reply messages
-      const organizationId = process.env.ORGANIZATION_ID || '';
       const autoReplyMessage = await firestore.getAutoReplyMessage(organizationId, text);
 
       if (autoReplyMessage) {
         // Send auto-reply message
-        await replyMessage(replyToken, [createTextMessage(autoReplyMessage)]);
+        await replyMessage(replyToken, [createTextMessage(autoReplyMessage)], orgConfig.line.channelAccessToken);
 
         // If it's a consultation request, save it
         if (text === '個別相談希望' || text === '個別相談' || text === '相談希望') {
@@ -139,7 +182,7 @@ async function handleTextMessage(event: WebhookEvent): Promise<void> {
       } else {
         // Unknown command
         const message = messages.generateUnknownCommandMessage();
-        await replyMessage(replyToken, [createTextMessage(message)]);
+        await replyMessage(replyToken, [createTextMessage(message)], orgConfig.line.channelAccessToken);
       }
     }
   } catch (error) {
@@ -148,7 +191,7 @@ async function handleTextMessage(event: WebhookEvent): Promise<void> {
   }
 }
 
-async function handleFollowEvent(event: WebhookEvent): Promise<void> {
+async function handleFollowEvent(event: WebhookEvent, organizationId: string): Promise<void> {
   const userId = event.source.userId;
   if (!userId) {
     return;
@@ -158,12 +201,11 @@ async function handleFollowEvent(event: WebhookEvent): Promise<void> {
     // Initialize Firebase
     ensureFirebaseInitialized();
 
-    // Get config from environment variables
-    const organizationId = process.env.ORGANIZATION_ID || '';
-    const liffId = process.env.LIFF_ID || '';
+    // Get organization config
+    const orgConfig = await getOrganizationConfig(organizationId);
 
     // Get user profile from LINE
-    const profile = await getProfile(userId);
+    const profile = await getProfile(userId, orgConfig.line.channelAccessToken);
 
     // Save user to Firestore
     await firestore.upsertLineUser(userId, profile.displayName, true, organizationId);
@@ -173,16 +215,16 @@ async function handleFollowEvent(event: WebhookEvent): Promise<void> {
 
     if (welcomeMessage) {
       // Add LIFF app link to the message
-      const liffUrl = `https://liff.line.me/${liffId}`;
+      const liffUrl = `https://liff.line.me/${orgConfig.liff.id}`;
       const messageWithLink = `${welcomeMessage}\n\n【セミナー申込はこちら】\n${liffUrl}`;
 
       // Send welcome message
-      await pushMessage(userId, [createTextMessage(messageWithLink)]);
+      await pushMessage(userId, [createTextMessage(messageWithLink)], orgConfig.line.channelAccessToken);
     } else {
       // Fallback welcome message if no template is configured
-      const liffUrl = `https://liff.line.me/${liffId}`;
+      const liffUrl = `https://liff.line.me/${orgConfig.liff.id}`;
       const defaultMessage = `友だち追加ありがとうございます！\n\nセミナーのお申込みは下記のリンクからどうぞ。\n${liffUrl}`;
-      await pushMessage(userId, [createTextMessage(defaultMessage)]);
+      await pushMessage(userId, [createTextMessage(defaultMessage)], orgConfig.line.channelAccessToken);
     }
   } catch (error) {
     console.error('Error handling follow event:', error);
