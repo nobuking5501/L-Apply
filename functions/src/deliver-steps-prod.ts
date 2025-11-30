@@ -1,4 +1,4 @@
-import { onSchedule } from 'firebase-functions/v2/scheduler';
+import { onRequest } from 'firebase-functions/v2/https';
 import { pushMessageWithRetry, createTextMessage } from './utils/line';
 import { ensureFirebaseInitialized } from './utils/firebase-init';
 import { getOrganizationConfig } from './config';
@@ -6,16 +6,16 @@ import * as stepDelivery from './utils/step-delivery';
 import * as firestore from './utils/firestore';
 
 /**
- * ステップ配信を実行する Scheduled Function
- * 5分ごとに実行され、送信予定のステップ配信を処理
+ * ステップ配信を実行する HTTP Function
+ * Cloud Schedulerから5分ごとに呼び出され、送信予定のステップ配信を処理
  */
-export const deliverSteps = onSchedule(
+export const deliverSteps = onRequest(
   {
-    schedule: 'every 5 minutes',
-    timeZone: 'Asia/Tokyo',
     region: 'asia-northeast1',
+    // Allow unauthenticated requests from Cloud Scheduler
+    // Cloud Scheduler will use OIDC token authentication
   },
-  async (event) => {
+  async (req, res) => {
     console.log('Step delivery function triggered at:', new Date().toISOString());
 
     try {
@@ -78,9 +78,10 @@ export const deliverSteps = onSchedule(
       }
 
       console.log('Step delivery function completed successfully');
+      res.status(200).json({ success: true, message: 'Step deliveries processed successfully' });
     } catch (error) {
       console.error('Step delivery function error:', error);
-      throw error;
+      res.status(500).json({ success: false, error: 'Internal server error' });
     }
   }
 );

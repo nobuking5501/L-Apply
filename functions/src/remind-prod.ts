@@ -1,4 +1,4 @@
-import { onSchedule } from 'firebase-functions/v2/scheduler';
+import { onRequest } from 'firebase-functions/v2/https';
 import { Timestamp } from 'firebase-admin/firestore';
 import { pushMessageWithRetry, createTextMessage } from './utils/line';
 import { ensureFirebaseInitialized } from './utils/firebase-init';
@@ -6,13 +6,13 @@ import { getOrganizationConfig } from './config';
 import * as firestore from './utils/firestore';
 import * as timezone from './utils/timezone';
 
-export const remind = onSchedule(
+export const remind = onRequest(
   {
-    schedule: 'every 5 minutes',
-    timeZone: 'Asia/Tokyo',
     region: 'asia-northeast1',
+    // Allow unauthenticated requests from Cloud Scheduler
+    // Cloud Scheduler will use OIDC token authentication
   },
-  async (event) => {
+  async (req, res) => {
     console.log('Reminder function triggered at:', new Date().toISOString());
 
     try {
@@ -65,9 +65,10 @@ export const remind = onSchedule(
       }
 
       console.log('Reminder function completed successfully');
+      res.status(200).json({ success: true, message: 'Reminders processed successfully' });
     } catch (error) {
       console.error('Reminder function error:', error);
-      throw error;
+      res.status(500).json({ success: false, error: 'Internal server error' });
     }
   }
 );

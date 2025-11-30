@@ -8,6 +8,15 @@ import * as messages from './utils/messages';
 import * as stepDelivery from './utils/step-delivery';
 import { getOrganizationConfig } from './config';
 import { ReminderType } from './types';
+import { getReminderTemplates, calculateReminderTime } from './utils/reminder-helper';
+import {
+  canAcceptApplication,
+  incrementApplicationCount,
+  canCreateReminder,
+  incrementReminderCount,
+  canCreateStepDelivery,
+  incrementStepDeliveryCount,
+} from './utils/admin-firestore';
 
 interface ApplyRequestBody {
   idToken: string;
@@ -84,7 +93,6 @@ export const apply = onRequest(
 
       // Check subscription limits
       try {
-        const { canAcceptApplication, incrementApplicationCount } = await import('./utils/admin-firestore');
         const canAccept = await canAcceptApplication(orgConfig.organizationId);
 
         if (!canAccept) {
@@ -121,7 +129,6 @@ export const apply = onRequest(
 
       // Increment application count for subscription tracking
       try {
-        const { incrementApplicationCount } = await import('./utils/admin-firestore');
         await incrementApplicationCount(orgConfig.organizationId);
       } catch (error) {
         console.warn('Failed to increment application count:', error);
@@ -130,7 +137,6 @@ export const apply = onRequest(
       // Create reminders if consent is true
       if (user.consent) {
         // Get reminder templates from Firestore
-        const { getReminderTemplates, calculateReminderTime } = await import('./utils/reminder-helper');
         const db = firestore.getDb();
         const reminderTemplates = await getReminderTemplates(db, orgConfig.organizationId);
 
@@ -187,8 +193,6 @@ export const apply = onRequest(
         // Check subscription limits
         let canCreateReminders = true;
         try {
-          const { canCreateReminder } = await import('./utils/admin-firestore');
-
           for (let i = 0; i < remindersToCreate.length; i++) {
             const canCreate = await canCreateReminder(orgConfig.organizationId);
             if (!canCreate) {
@@ -219,7 +223,6 @@ export const apply = onRequest(
 
           // Increment reminder count
           try {
-            const { incrementReminderCount } = await import('./utils/admin-firestore');
             for (let i = 0; i < remindersToCreate.length; i++) {
               await incrementReminderCount(orgConfig.organizationId);
             }
@@ -242,8 +245,6 @@ export const apply = onRequest(
       // Check subscription limits for step deliveries
       let allowedStepDeliveriesCount = stepDeliveries.length;
       try {
-        const { canCreateStepDelivery, incrementStepDeliveryCount } = await import('./utils/admin-firestore');
-
         // Check how many step deliveries we can create
         allowedStepDeliveriesCount = 0;
         for (let i = 0; i < stepDeliveries.length; i++) {
@@ -272,7 +273,6 @@ export const apply = onRequest(
       // Increment step delivery count for subscription tracking
       if (allowedStepDeliveriesCount > 0) {
         try {
-          const { incrementStepDeliveryCount } = await import('./utils/admin-firestore');
           for (let i = 0; i < allowedStepDeliveriesCount; i++) {
             await incrementStepDeliveryCount(orgConfig.organizationId);
           }
