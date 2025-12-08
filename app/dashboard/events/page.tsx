@@ -166,6 +166,19 @@ export default function EventsPage() {
     if (!editingEvent || !userData?.organizationId) return;
 
     try {
+      // Ensure slots have IDs (preserve existing IDs, assign new ones for new slots)
+      const slotsWithIds = formData.slots.map((slot, index) => {
+        // If slot already has an id, keep it
+        if ('id' in slot && slot.id) {
+          return slot;
+        }
+        // Otherwise, assign a new id
+        return {
+          ...slot,
+          id: `slot-${Date.now()}-${index}`,
+        };
+      });
+
       // If setting this event as active, deactivate all other active events
       if (formData.isActive) {
         const activeEventsQuery = query(
@@ -202,6 +215,7 @@ export default function EventsPage() {
 
       await updateDoc(doc(db, 'events', editingEvent.id), {
         ...formData,
+        slots: slotsWithIds,
         updatedAt: Timestamp.now(),
       });
 
