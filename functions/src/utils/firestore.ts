@@ -308,6 +308,7 @@ export async function checkSlotCapacity(eventId: string, slotId: string): Promis
     const eventDoc = await getDb().collection('events').doc(eventId).get();
 
     if (!eventDoc.exists) {
+      console.error(`Event ${eventId} not found`);
       return false;
     }
 
@@ -316,10 +317,16 @@ export async function checkSlotCapacity(eventId: string, slotId: string): Promis
     const slot = slots.find((s: any) => s.id === slotId);
 
     if (!slot) {
+      console.error(`Slot ${slotId} not found in event ${eventId}`);
       return false;
     }
 
-    return slot.currentCapacity < slot.maxCapacity;
+    // Handle undefined/null currentCapacity (backward compatibility with old events)
+    const currentCapacity = slot.currentCapacity || 0;
+    const hasCapacity = currentCapacity < slot.maxCapacity;
+
+    console.log(`Slot ${slotId} capacity check: ${currentCapacity}/${slot.maxCapacity} - ${hasCapacity ? 'available' : 'full'}`);
+    return hasCapacity;
   } catch (error) {
     console.error('Error checking slot capacity:', error);
     return false;
@@ -351,14 +358,15 @@ export async function incrementSlotCapacity(eventId: string, slotId: string): Pr
       return false;
     }
 
-    // Check capacity before incrementing
-    if (slots[slotIndex].currentCapacity >= slots[slotIndex].maxCapacity) {
+    // Check capacity before incrementing (handle undefined/null currentCapacity)
+    const currentCapacity = slots[slotIndex].currentCapacity || 0;
+    if (currentCapacity >= slots[slotIndex].maxCapacity) {
       console.error(`Slot ${slotId} is already full`);
       return false;
     }
 
     // Increment current capacity
-    slots[slotIndex].currentCapacity = (slots[slotIndex].currentCapacity || 0) + 1;
+    slots[slotIndex].currentCapacity = currentCapacity + 1;
 
     // Update the event document
     await eventRef.update({
@@ -399,14 +407,15 @@ export async function decrementSlotCapacity(eventId: string, slotId: string): Pr
       return false;
     }
 
-    // Prevent negative capacity
-    if (slots[slotIndex].currentCapacity <= 0) {
+    // Prevent negative capacity (handle undefined/null currentCapacity)
+    const currentCapacity = slots[slotIndex].currentCapacity || 0;
+    if (currentCapacity <= 0) {
       console.warn(`Slot ${slotId} capacity is already 0`);
       return false;
     }
 
     // Decrement current capacity
-    slots[slotIndex].currentCapacity = slots[slotIndex].currentCapacity - 1;
+    slots[slotIndex].currentCapacity = currentCapacity - 1;
 
     // Update the event document
     await eventRef.update({
