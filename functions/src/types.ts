@@ -24,6 +24,9 @@ export interface Application {
   status: ApplicationStatus;
   organizationId?: string;
   createdAt: Timestamp;
+  // Event management fields (optional for backward compatibility)
+  eventId?: string;
+  slotId?: string;
 }
 
 export interface Reminder {
@@ -53,10 +56,14 @@ export interface StepDelivery {
 
 export interface ApplyRequestBody {
   idToken: string;
+  liffId: string;
   plan: string;
   slotAt: string; // ISO 8601 string
   notes?: string;
   consent: boolean;
+  // Event management fields (optional for backward compatibility)
+  eventId?: string;
+  slotId?: string;
 }
 
 // Global config (environment variables)

@@ -25,6 +25,9 @@ interface ApplyRequestBody {
   slotAt: string;
   notes?: string;
   consent: boolean;
+  // Event management fields (optional for backward compatibility)
+  eventId?: string;
+  slotId?: string;
 }
 
 export const apply = onRequest(
@@ -91,6 +94,18 @@ export const apply = onRequest(
         return;
       }
 
+      // Check event slot capacity (if eventId and slotId are provided)
+      if (body.eventId && body.slotId) {
+        const hasCapacity = await firestore.checkSlotCapacity(body.eventId, body.slotId);
+        if (!hasCapacity) {
+          res.status(409).json({
+            error: 'Slot is full',
+            message: '選択された日時は満席です。他の日時をお選びください。'
+          });
+          return;
+        }
+      }
+
       // Check subscription limits
       try {
         const canAccept = await canAcceptApplication(orgConfig.organizationId);
@@ -125,7 +140,19 @@ export const apply = onRequest(
         status: 'applied',
         organizationId: orgConfig.organizationId,
         createdAt: Timestamp.now(),
+        // Include eventId and slotId if provided (for event management)
+        eventId: body.eventId,
+        slotId: body.slotId,
       });
+
+      // Increment event slot capacity (if eventId and slotId are provided)
+      if (body.eventId && body.slotId) {
+        const success = await firestore.incrementSlotCapacity(body.eventId, body.slotId);
+        if (!success) {
+          console.error(`Failed to increment slot capacity for event ${body.eventId}, slot ${body.slotId}`);
+          // Note: We continue even if capacity update fails, as the application is already created
+        }
+      }
 
       // Increment application count for subscription tracking
       try {

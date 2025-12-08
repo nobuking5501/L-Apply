@@ -296,3 +296,128 @@ export async function getOrganizationIdByLiffId(liffId: string): Promise<string 
 
   return snapshot.docs[0].id;
 }
+
+/**
+ * Check if event slot has available capacity
+ * @param eventId Event document ID
+ * @param slotId Slot ID within the event
+ * @returns true if slot has capacity, false if full or not found
+ */
+export async function checkSlotCapacity(eventId: string, slotId: string): Promise<boolean> {
+  try {
+    const eventDoc = await getDb().collection('events').doc(eventId).get();
+
+    if (!eventDoc.exists) {
+      return false;
+    }
+
+    const eventData = eventDoc.data();
+    const slots = eventData?.slots || [];
+    const slot = slots.find((s: any) => s.id === slotId);
+
+    if (!slot) {
+      return false;
+    }
+
+    return slot.currentCapacity < slot.maxCapacity;
+  } catch (error) {
+    console.error('Error checking slot capacity:', error);
+    return false;
+  }
+}
+
+/**
+ * Increment event slot current capacity by 1
+ * @param eventId Event document ID
+ * @param slotId Slot ID within the event
+ * @returns true if successfully incremented, false otherwise
+ */
+export async function incrementSlotCapacity(eventId: string, slotId: string): Promise<boolean> {
+  try {
+    const eventRef = getDb().collection('events').doc(eventId);
+    const eventDoc = await eventRef.get();
+
+    if (!eventDoc.exists) {
+      console.error(`Event ${eventId} not found`);
+      return false;
+    }
+
+    const eventData = eventDoc.data();
+    const slots = eventData?.slots || [];
+    const slotIndex = slots.findIndex((s: any) => s.id === slotId);
+
+    if (slotIndex === -1) {
+      console.error(`Slot ${slotId} not found in event ${eventId}`);
+      return false;
+    }
+
+    // Check capacity before incrementing
+    if (slots[slotIndex].currentCapacity >= slots[slotIndex].maxCapacity) {
+      console.error(`Slot ${slotId} is already full`);
+      return false;
+    }
+
+    // Increment current capacity
+    slots[slotIndex].currentCapacity = (slots[slotIndex].currentCapacity || 0) + 1;
+
+    // Update the event document
+    await eventRef.update({
+      slots,
+      updatedAt: Timestamp.now(),
+    });
+
+    console.log(`Slot ${slotId} capacity incremented to ${slots[slotIndex].currentCapacity}/${slots[slotIndex].maxCapacity}`);
+    return true;
+  } catch (error) {
+    console.error('Error incrementing slot capacity:', error);
+    return false;
+  }
+}
+
+/**
+ * Decrement event slot current capacity by 1 (for cancellations)
+ * @param eventId Event document ID
+ * @param slotId Slot ID within the event
+ * @returns true if successfully decremented, false otherwise
+ */
+export async function decrementSlotCapacity(eventId: string, slotId: string): Promise<boolean> {
+  try {
+    const eventRef = getDb().collection('events').doc(eventId);
+    const eventDoc = await eventRef.get();
+
+    if (!eventDoc.exists) {
+      console.error(`Event ${eventId} not found`);
+      return false;
+    }
+
+    const eventData = eventDoc.data();
+    const slots = eventData?.slots || [];
+    const slotIndex = slots.findIndex((s: any) => s.id === slotId);
+
+    if (slotIndex === -1) {
+      console.error(`Slot ${slotId} not found in event ${eventId}`);
+      return false;
+    }
+
+    // Prevent negative capacity
+    if (slots[slotIndex].currentCapacity <= 0) {
+      console.warn(`Slot ${slotId} capacity is already 0`);
+      return false;
+    }
+
+    // Decrement current capacity
+    slots[slotIndex].currentCapacity = slots[slotIndex].currentCapacity - 1;
+
+    // Update the event document
+    await eventRef.update({
+      slots,
+      updatedAt: Timestamp.now(),
+    });
+
+    console.log(`Slot ${slotId} capacity decremented to ${slots[slotIndex].currentCapacity}/${slots[slotIndex].maxCapacity}`);
+    return true;
+  } catch (error) {
+    console.error('Error decrementing slot capacity:', error);
+    return false;
+  }
+}

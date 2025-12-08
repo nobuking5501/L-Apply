@@ -168,12 +168,15 @@ export default function ApplyPage() {
           slotAt: slotDateTime,
           notes: formData.notes,
           consent: formData.consent,
+          // Include eventId and slotId for event management
+          eventId: activeEvent.id,
+          slotId: selectedSlot,
         }),
       });
 
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to submit application');
+        throw new Error(errorData.message || errorData.error || 'Failed to submit application');
       }
 
       setSuccess(true);
