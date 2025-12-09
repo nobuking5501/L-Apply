@@ -25,7 +25,6 @@ import {
 const navigation = [
   { name: 'ホーム', href: '/dashboard', icon: LayoutDashboard },
   { name: 'イベント管理', href: '/dashboard/events', icon: Calendar },
-  { name: 'ステップ配信監視', href: '/dashboard/step-delivery', icon: Send },
   { name: 'ステップ配信設定', href: '/dashboard/step-messages', icon: MessageSquare },
   { name: 'リマインダー設定', href: '/dashboard/reminders', icon: Bell },
   { name: '自動返信設定', href: '/dashboard/auto-replies', icon: MessageSquare },
