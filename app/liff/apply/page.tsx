@@ -84,18 +84,13 @@ export default function ApplyPage() {
         }
 
         const eventData = eventsSnapshot.docs[0].data();
-        const eventWithSlots = {
+        setActiveEvent({
           id: eventsSnapshot.docs[0].id,
           title: eventData.title,
           description: eventData.description,
           location: eventData.location,
           slots: eventData.slots || [],
-        };
-
-        console.log('Active event loaded:', eventWithSlots);
-        console.log('Slots:', eventWithSlots.slots);
-
-        setActiveEvent(eventWithSlots);
+        });
       } catch (err) {
         console.error('Error fetching active event:', err);
         setError('イベント情報の取得に失敗しました');
@@ -152,41 +147,31 @@ export default function ApplyPage() {
       }
 
       // Find selected slot
-      console.log('Selected slot ID:', selectedSlot);
-      console.log('All slots:', activeEvent.slots);
-
       const slot = activeEvent.slots.find(s => s.id === selectedSlot);
-      console.log('Found slot:', slot);
-
       if (!slot) {
         throw new Error('選択された日時が見つかりません');
       }
 
       // Convert date and time to ISO format
       const slotDateTime = `${slot.date}T${slot.time}:00+09:00`;
-      console.log('Slot date/time:', slotDateTime);
 
       // Call apply API
-      const requestBody = {
-        idToken,
-        liffId: LIFF_ID,
-        plan: activeEvent.title,
-        slotAt: slotDateTime,
-        notes: formData.notes,
-        consent: formData.consent,
-        // Include eventId and slotId for event management
-        eventId: activeEvent.id,
-        slotId: selectedSlot,
-      };
-
-      console.log('Sending API request:', requestBody);
-
       const response = await fetch(APPLY_API_URL, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(requestBody),
+        body: JSON.stringify({
+          idToken,
+          liffId: LIFF_ID,
+          plan: activeEvent.title,
+          slotAt: slotDateTime,
+          notes: formData.notes,
+          consent: formData.consent,
+          // Include eventId and slotId for event management
+          eventId: activeEvent.id,
+          slotId: selectedSlot,
+        }),
       });
 
       if (!response.ok) {
