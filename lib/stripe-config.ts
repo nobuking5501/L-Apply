@@ -22,7 +22,7 @@ export const STRIPE_PLANS: Record<string, StripePlan> = {
     id: 'monitor',
     name: 'モニタープラン',
     price: 980,
-    stripePriceId: 'price_1ST4AhLx84xZL0YKtGiGtaay', // モニタープラン
+    stripePriceId: 'price_1ScS53Lx84xZL0YKFO15KkWI', // モニタープラン
     features: [
       'イベント管理: 最大10件',
       'ステップ配信: 最大3件',
@@ -40,7 +40,7 @@ export const STRIPE_PLANS: Record<string, StripePlan> = {
     id: 'regular',
     name: '正規プラン',
     price: 1980,
-    stripePriceId: 'price_regular_test', // TODO: 正規プランのPrice IDに置き換える
+    stripePriceId: 'price_1ScS56Lx84xZL0YK77mbec5Q', // 正規プラン
     features: [
       'イベント管理: 最大10件',
       'ステップ配信: 最大3件',
@@ -58,7 +58,7 @@ export const STRIPE_PLANS: Record<string, StripePlan> = {
     id: 'pro',
     name: 'プロプラン',
     price: 4980,
-    stripePriceId: 'price_pro_test', // TODO: プロプランのPrice IDに置き換える
+    stripePriceId: 'price_1ScS59Lx84xZL0YKwSLdHLKJ', // プロプラン
     features: [
       'イベント管理: 最大50件',
       'ステップ配信: 最大10件',
