@@ -19,6 +19,7 @@ import {
   Calendar,
   CreditCard,
   Bell,
+  BookOpen,
 } from 'lucide-react';
 
 const navigation = [
@@ -30,6 +31,7 @@ const navigation = [
   { name: '自動返信設定', href: '/dashboard/auto-replies', icon: MessageSquare },
   { name: '申込者管理', href: '/dashboard/applications', icon: Users },
   { name: 'サブスクリプション', href: '/dashboard/subscription', icon: CreditCard },
+  { name: '使い方ガイド', href: '/dashboard/guide', icon: BookOpen },
   { name: '設定', href: '/dashboard/settings', icon: Settings },
 ];
 
