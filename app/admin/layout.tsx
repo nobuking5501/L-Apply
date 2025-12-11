@@ -1,13 +1,61 @@
 'use client';
 
-import { ReactNode } from 'react';
+import { ReactNode, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
+import { useAuth } from '@/contexts/AuthContext';
 
 export default function AdminLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname();
+  const router = useRouter();
+  const { user, userData, loading } = useAuth();
+  const [hasAccessKey, setHasAccessKey] = useState(false);
 
   const isActive = (path: string) => pathname === path;
+
+  // アクセスキーのチェック（ログインページ以外）
+  useEffect(() => {
+    if (pathname !== '/admin/login') {
+      const storedKey = sessionStorage.getItem('admin_access_key');
+      const expectedKey = process.env.NEXT_PUBLIC_ADMIN_ACCESS_KEY || '';
+      setHasAccessKey(storedKey === expectedKey);
+    }
+  }, [pathname]);
+
+  // 認証チェック（ログインページ以外）
+  useEffect(() => {
+    // ログインページはスキップ
+    if (pathname === '/admin/login') {
+      return;
+    }
+
+    if (!loading) {
+      if (!user) {
+        // 未ログインの場合、管理者ログインページへ
+        router.push('/admin/login');
+      } else if (userData && userData.role !== 'admin') {
+        // 管理者以外は dashboard へリダイレクト
+        router.push('/dashboard');
+      } else if (!hasAccessKey) {
+        // アクセスキーがない場合もリダイレクト
+        router.push('/dashboard');
+      }
+    }
+  }, [user, userData, loading, pathname, hasAccessKey, router]);
+
+  // ログインページはレイアウトなしで表示
+  if (pathname === '/admin/login') {
+    return <>{children}</>;
+  }
+
+  // 認証チェック中または権限なし
+  if (loading || !user || !userData || userData.role !== 'admin' || !hasAccessKey) {
+    return (
+      <div className="flex justify-center items-center h-screen bg-gray-50">
+        <div className="text-gray-500">認証確認中...</div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">
