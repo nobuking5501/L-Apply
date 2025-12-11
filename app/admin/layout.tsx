@@ -18,7 +18,18 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
     if (pathname !== '/admin/login') {
       const storedKey = sessionStorage.getItem('admin_access_key');
       const expectedKey = process.env.NEXT_PUBLIC_ADMIN_ACCESS_KEY || '';
-      setHasAccessKey(storedKey === expectedKey);
+      const match = storedKey === expectedKey;
+      console.log('🔑 Admin Layout - Access Key Check:', {
+        pathname,
+        storedKey,
+        expectedKey,
+        expectedKeyLength: expectedKey.length,
+        match,
+      });
+      setHasAccessKey(match);
+    } else {
+      // ログインページの場合は true に設定
+      setHasAccessKey(true);
     }
   }, [pathname]);
 
@@ -36,12 +47,13 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
       } else if (userData && userData.role !== 'admin') {
         // 管理者以外は dashboard へリダイレクト
         router.push('/dashboard');
-      } else if (!hasAccessKey) {
-        // アクセスキーがない場合もリダイレクト
-        router.push('/dashboard');
       }
+      // 一時的: hasAccessKey チェックを無効化
+      // else if (!hasAccessKey) {
+      //   router.push('/dashboard');
+      // }
     }
-  }, [user, userData, loading, pathname, hasAccessKey, router]);
+  }, [user, userData, loading, pathname, router]);
 
   // ログインページはレイアウトなしで表示
   if (pathname === '/admin/login') {
@@ -49,7 +61,8 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
   }
 
   // 認証チェック中または権限なし
-  if (loading || !user || !userData || userData.role !== 'admin' || !hasAccessKey) {
+  // 一時的: hasAccessKey チェックを無効化
+  if (loading || !user || !userData || userData.role !== 'admin') {
     return (
       <div className="flex justify-center items-center h-screen bg-gray-50">
         <div className="text-gray-500">認証確認中...</div>

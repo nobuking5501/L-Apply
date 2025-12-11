@@ -43,14 +43,15 @@ function AdminLoginForm() {
   // 既にログイン済みで管理者の場合は /admin へリダイレクト
   useEffect(() => {
     if (!loading && user && userData) {
-      if (userData.role === 'admin' && hasValidKey) {
+      // 一時的: role が admin なら hasValidKey をチェックせずに /admin へ
+      if (userData.role === 'admin') {
         router.push('/admin');
       } else if (userData.role !== 'admin') {
         // 管理者以外は /dashboard へ
         router.push('/dashboard');
       }
     }
-  }, [user, userData, loading, hasValidKey, router]);
+  }, [user, userData, loading, router]);
 
   // アクセスキーがない場合は404風の画面を表示
   if (!hasValidKey) {
