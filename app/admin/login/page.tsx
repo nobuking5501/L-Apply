@@ -27,6 +27,14 @@ function AdminLoginForm() {
     const keyParam = searchParams.get('key');
     const storedKey = sessionStorage.getItem('admin_access_key');
 
+    console.log('🔑 Admin Access Key Debug:', {
+      expectedKey: ADMIN_ACCESS_KEY,
+      expectedKeyLength: ADMIN_ACCESS_KEY.length,
+      keyParam,
+      keyParamLength: keyParam?.length,
+      match: keyParam === ADMIN_ACCESS_KEY,
+    });
+
     if (keyParam && keyParam === ADMIN_ACCESS_KEY) {
       // URLパラメータにキーがある場合、セッションに保存
       sessionStorage.setItem('admin_access_key', keyParam);
