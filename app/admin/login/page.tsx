@@ -44,9 +44,9 @@ function AdminLoginForm() {
   useEffect(() => {
     if (!loading && user && userData) {
       // 一時的: role が admin なら hasValidKey をチェックせずに /admin へ
-      if (userData.role === 'admin') {
+      if ((userData.role as string) === 'admin') {
         router.push('/admin');
-      } else if (userData.role !== 'admin') {
+      } else {
         // 管理者以外は /dashboard へ
         router.push('/dashboard');
       }

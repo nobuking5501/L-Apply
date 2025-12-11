@@ -44,7 +44,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
       if (!user) {
         // 未ログインの場合、管理者ログインページへ
         router.push('/admin/login');
-      } else if (userData && userData.role !== 'admin') {
+      } else if (userData && (userData.role as string) !== 'admin') {
         // 管理者以外は dashboard へリダイレクト
         router.push('/dashboard');
       }
@@ -62,7 +62,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
 
   // 認証チェック中または権限なし
   // 一時的: hasAccessKey チェックを無効化
-  if (loading || !user || !userData || userData.role !== 'admin') {
+  if (loading || !user || !userData || (userData.role as string) !== 'admin') {
     return (
       <div className="flex justify-center items-center h-screen bg-gray-50">
         <div className="text-gray-500">認証確認中...</div>
