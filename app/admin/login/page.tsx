@@ -6,6 +6,9 @@ import { useAuth } from '@/contexts/AuthContext';
 import { signInWithEmailAndPassword } from 'firebase/auth';
 import { auth } from '@/lib/firebase';
 
+// Force dynamic rendering for admin login page
+export const dynamic = 'force-dynamic';
+
 const ADMIN_ACCESS_KEY = process.env.NEXT_PUBLIC_ADMIN_ACCESS_KEY || '';
 
 function AdminLoginForm() {

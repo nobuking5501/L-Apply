@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 
+// Force dynamic rendering for admin API routes
+export const dynamic = 'force-dynamic';
+
 // This is a placeholder for admin authentication
 // TODO: Implement proper admin authentication
 function isAdmin(request: NextRequest): boolean {
