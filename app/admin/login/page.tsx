@@ -27,14 +27,6 @@ function AdminLoginForm() {
     const keyParam = searchParams.get('key');
     const storedKey = sessionStorage.getItem('admin_access_key');
 
-    console.log('🔑 Admin Access Key Debug:', {
-      expectedKey: ADMIN_ACCESS_KEY,
-      expectedKeyLength: ADMIN_ACCESS_KEY.length,
-      keyParam,
-      keyParamLength: keyParam?.length,
-      match: keyParam === ADMIN_ACCESS_KEY,
-    });
-
     if (keyParam && keyParam === ADMIN_ACCESS_KEY) {
       // URLパラメータにキーがある場合、セッションに保存
       sessionStorage.setItem('admin_access_key', keyParam);
@@ -62,24 +54,11 @@ function AdminLoginForm() {
 
   // アクセスキーがない場合は404風の画面を表示
   if (!hasValidKey) {
-    // デバッグ情報を表示（一時的）
-    const keyParam = searchParams.get('key');
     return (
       <div className="min-h-screen bg-gray-100 flex items-center justify-center">
-        <div className="text-center max-w-2xl p-8">
+        <div className="text-center">
           <h1 className="text-6xl font-bold text-gray-300">404</h1>
           <p className="text-gray-600 mt-4">ページが見つかりません</p>
-
-          {/* デバッグ情報 */}
-          <div className="mt-8 p-4 bg-white rounded-lg shadow text-left text-xs">
-            <p className="font-bold mb-2">Debug Info:</p>
-            <p>Expected Key: {ADMIN_ACCESS_KEY || '(empty)'}</p>
-            <p>Expected Length: {ADMIN_ACCESS_KEY.length}</p>
-            <p>URL Key: {keyParam || '(none)'}</p>
-            <p>URL Key Length: {keyParam?.length || 0}</p>
-            <p>Match: {String(keyParam === ADMIN_ACCESS_KEY)}</p>
-          </div>
-
           <a
             href="/"
             className="mt-6 inline-block text-blue-600 hover:text-blue-800 text-sm"
