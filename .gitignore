@@ -56,3 +56,4 @@ setup-commands.sh
 *.swp
 *.swo
 *~
+.vercel

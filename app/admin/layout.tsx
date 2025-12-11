@@ -1,6 +1,6 @@
 'use client';
 
-import { ReactNode, useEffect, useState } from 'react';
+import { ReactNode, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
@@ -9,59 +9,23 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const { user, userData, loading } = useAuth();
-  const [hasAccessKey, setHasAccessKey] = useState(false);
 
   const isActive = (path: string) => pathname === path;
 
-  // アクセスキーのチェック（ログインページ以外）
+  // シンプルな認証チェック: role='admin' のみ
   useEffect(() => {
-    if (pathname !== '/admin/login') {
-      const storedKey = sessionStorage.getItem('admin_access_key');
-      const expectedKey = process.env.NEXT_PUBLIC_ADMIN_ACCESS_KEY || '';
-      const match = storedKey === expectedKey;
-      console.log('🔑 Admin Layout - Access Key Check:', {
-        pathname,
-        storedKey,
-        expectedKey,
-        expectedKeyLength: expectedKey.length,
-        match,
-      });
-      setHasAccessKey(match);
-    } else {
-      // ログインページの場合は true に設定
-      setHasAccessKey(true);
-    }
-  }, [pathname]);
-
-  // 認証チェック（ログインページ以外）
-  useEffect(() => {
-    // ログインページはスキップ
-    if (pathname === '/admin/login') {
-      return;
-    }
-
     if (!loading) {
       if (!user) {
-        // 未ログインの場合、管理者ログインページへ
-        router.push('/admin/login');
+        // 未ログインの場合、通常のログインページへ
+        router.push('/login');
       } else if (userData && (userData.role as string) !== 'admin') {
         // 管理者以外は dashboard へリダイレクト
         router.push('/dashboard');
       }
-      // 一時的: hasAccessKey チェックを無効化
-      // else if (!hasAccessKey) {
-      //   router.push('/dashboard');
-      // }
     }
-  }, [user, userData, loading, pathname, router]);
-
-  // ログインページはレイアウトなしで表示
-  if (pathname === '/admin/login') {
-    return <>{children}</>;
-  }
+  }, [user, userData, loading, router]);
 
   // 認証チェック中または権限なし
-  // 一時的: hasAccessKey チェックを無効化
   if (loading || !user || !userData || (userData.role as string) !== 'admin') {
     return (
       <div className="flex justify-center items-center h-screen bg-gray-50">
