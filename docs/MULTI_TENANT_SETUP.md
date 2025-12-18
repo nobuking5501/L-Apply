@@ -12,23 +12,23 @@ L-Applyは真のマルチテナントSaaSとして、各組織が独自のLINE �
 
 ## 既存顧客の方へ
 
-### ✅ 変更の影響
+### ⚠️ 重要な変更
 
-**既存のLIFFアプリは引き続き動作します。変更は不要です。**
+**真のマルチテナント対応により、URLパラメータ `liffId` が必須になりました。**
 
-- 環境変数 `NEXT_PUBLIC_LIFF_ID` がフォールバックとして機能します
-- 既存のEndpoint URLはそのまま使用できます
-- 動作に影響はありません
+- 環境変数フォールバックは削除されました
+- **Endpoint URLの更新が必要です**
 
-### 🔄 新しい方式への移行（オプション）
+### 🔄 必須の移行手順
 
-将来的に各組織が独自のLIFF IDを持つことを推奨します：
+以下の手順でEndpoint URLを更新してください：
 
-1. **ダッシュボードの設定ページ**にLIFF IDを登録
-2. **LINE DevelopersでEndpoint URLを更新**：
+1. **ダッシュボードの設定ページ**でLIFF IDを確認
+2. **LINE Developers Console**でEndpoint URLを更新：
    ```
    https://l-apply.vercel.app/liff/apply?liffId=あなたのLIFF_ID
    ```
+3. LIFF IDがダッシュボードに保存されていることを確認
 
 ---
 
@@ -158,15 +158,11 @@ https://asia-northeast1-l-apply.cloudfunctions.net/webhook
 
 ## 📊 Endpoint URL一覧（クイックリファレンス）
 
-### 既存顧客（環境変数を使用）
-```
-https://l-apply.vercel.app/liff/apply
-```
-
-### 新規顧客（URLパラメータを使用）
+### LIFF Endpoint URL（全顧客共通形式）
 ```
 https://l-apply.vercel.app/liff/apply?liffId=あなたのLIFF_ID
 ```
+**重要**: `liffId` パラメータは必須です
 
 ### Webhook（全組織共通）
 ```
