@@ -24,9 +24,16 @@ service cloud.firestore {
 
     // Organizations - 新規作成時はorgIdがユーザーIDと一致する場合のみ許可
     match /organizations/{orgId} {
-      allow read: if true; // LIFFからも読める（liffIdで検索するため）
+      // Read access: Same organization members or admins
+      // LIFF access is now handled via API route (/api/liff/organization)
+      allow read: if isSameOrganization(orgId) || isAdmin();
       allow create: if isSignedIn() && orgId == 'org_' + request.auth.uid;
       allow update, delete: if isSameOrganization(orgId) || isAdmin();
+    }
+
+    // Organization Secrets - Server-side only (via Admin SDK)
+    match /organization_secrets/{orgId} {
+      allow read, write: if false; // No client-side access
     }
 
     // Users - 自分のドキュメントのみ作成・読み書き可能

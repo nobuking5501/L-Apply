@@ -1,22 +1,21 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { doc, getDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
 import { useAuth } from '@/contexts/AuthContext';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Save, AlertCircle } from 'lucide-react';
+import { Save, AlertCircle, Copy, CheckCircle } from 'lucide-react';
 import type { Organization } from '@/types';
 
 export default function SettingsPage() {
-  const { userData } = useAuth();
+  const { user, userData } = useAuth(); // Get user from AuthContext
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [success, setSuccess] = useState(false);
   const [organization, setOrganization] = useState<Organization | null>(null);
+  const [copiedUrl, setCopiedUrl] = useState<string | null>(null);
 
   // Form state
   const [orgName, setOrgName] = useState('');
@@ -32,22 +31,52 @@ export default function SettingsPage() {
 
     const fetchOrganization = async () => {
       try {
+        // Read public organization info directly from Firestore (allowed by security rules)
+        const { doc, getDoc } = await import('firebase/firestore');
+        const { db } = await import('@/lib/firebase');
+
         const orgDoc = await getDoc(doc(db, 'organizations', userData.organizationId));
+
         if (orgDoc.exists()) {
-          const orgData = { id: orgDoc.id, ...orgDoc.data() } as Organization;
+          const orgData = { id: orgDoc.id, ...orgDoc.data() } as any;
           setOrganization(orgData);
 
-          // Set form values
+          // Support both old structure (settings.branding) and new structure (root level)
+          const settings = orgData.settings || {};
+          const branding = settings.branding || {};
+
+          // DEBUG: Log the data to see what we're getting
+          console.log('=== DEBUG: Organization Data ===');
+          console.log('Full orgData:', orgData);
+          console.log('settings:', settings);
+          console.log('branding:', branding);
+          console.log('lineChannelId from root:', orgData.lineChannelId);
+          console.log('lineChannelId from settings:', settings.lineChannelId);
+          console.log('lineChannelId from branding:', branding.lineChannelId);
+          console.log('liffId from root:', orgData.liffId);
+          console.log('liffId from settings:', settings.liffId);
+          console.log('liffId from branding:', branding.liffId);
+          console.log('companyName from root:', orgData.companyName);
+          console.log('companyName from branding:', branding.companyName);
+
+          // Set form values - check all possible locations for backward compatibility
           setOrgName(orgData.name || '');
-          setLineChannelId(orgData.lineChannelId || '');
-          setLineChannelSecret(orgData.lineChannelSecret || '');
-          setLineAccessToken(orgData.lineChannelAccessToken || '');
-          setLiffId(orgData.liffId || '');
-          setCompanyName(orgData.companyName || '');
-          setPrimaryColor(orgData.primaryColor || '#3B82F6');
+          setLineChannelId(orgData.lineChannelId || settings.lineChannelId || branding.lineChannelId || '');
+          setLineChannelSecret(''); // Secrets are in organization_secrets, not shown
+          setLineAccessToken(''); // Secrets are in organization_secrets, not shown
+          setLiffId(orgData.liffId || settings.liffId || branding.liffId || '');
+          setCompanyName(orgData.companyName || branding.companyName || '');
+          setPrimaryColor(orgData.primaryColor || branding.primaryColor || '#3B82F6');
+
+          // DEBUG: Log what we set
+          console.log('=== DEBUG: Set Values ===');
+          console.log('Set lineChannelId:', orgData.lineChannelId || settings.lineChannelId || branding.lineChannelId || '');
+          console.log('Set liffId:', orgData.liffId || settings.liffId || branding.liffId || '');
+          console.log('Set companyName:', orgData.companyName || branding.companyName || '');
         }
       } catch (error) {
         console.error('Error fetching organization:', error);
+        alert('設定の読み込みに失敗しました');
       } finally {
         setLoading(false);
       }
@@ -58,31 +87,69 @@ export default function SettingsPage() {
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!userData?.organizationId) return;
+    if (!userData?.organizationId || !user) return;
 
     setSaving(true);
     setSuccess(false);
 
     try {
-      const orgRef = doc(db, 'organizations', userData.organizationId);
-      await updateDoc(orgRef, {
-        name: orgName,
-        lineChannelId,
-        lineChannelSecret,
-        lineChannelAccessToken: lineAccessToken,
-        liffId,
-        companyName,
+      // Get ID token for authentication from AuthContext user
+      const idToken = await user.getIdToken();
+
+      // Prepare update data (trim values to prevent issues with spaces)
+      const updateData: any = {
+        name: orgName.trim(),
+        lineChannelId: lineChannelId.trim(),
+        liffId: liffId.trim(),
+        companyName: companyName.trim(),
         primaryColor,
-        updatedAt: serverTimestamp(),
+      };
+
+      // Only include secrets if they've been changed (not empty)
+      if (lineChannelSecret) {
+        updateData.lineChannelSecret = lineChannelSecret;
+      }
+      if (lineAccessToken) {
+        updateData.lineChannelAccessToken = lineAccessToken;
+      }
+
+      // Update settings via API
+      const response = await fetch('/api/settings', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${idToken}`,
+        },
+        body: JSON.stringify(updateData),
       });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to save settings');
+      }
 
       setSuccess(true);
       setTimeout(() => setSuccess(false), 3000);
+
+      // Clear secret fields after successful save
+      setLineChannelSecret('');
+      setLineAccessToken('');
     } catch (error) {
       console.error('Error saving settings:', error);
-      alert('設定の保存に失敗しました');
+      alert('設定の保存に失敗しました: ' + (error instanceof Error ? error.message : '不明なエラー'));
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleCopyUrl = async (url: string, label: string) => {
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopiedUrl(label);
+      setTimeout(() => setCopiedUrl(null), 2000);
+    } catch (error) {
+      console.error('Failed to copy:', error);
+      alert('コピーに失敗しました');
     }
   };
 
@@ -201,8 +268,11 @@ export default function SettingsPage() {
                 type="password"
                 value={lineChannelSecret}
                 onChange={(e) => setLineChannelSecret(e.target.value)}
-                placeholder="••••••••••••••••"
+                placeholder="変更する場合のみ入力"
               />
+              <p className="text-xs text-gray-500">
+                セキュリティのため、既存の値は表示されません。変更する場合のみ入力してください。
+              </p>
             </div>
 
             <div className="space-y-2">
@@ -212,8 +282,11 @@ export default function SettingsPage() {
                 type="password"
                 value={lineAccessToken}
                 onChange={(e) => setLineAccessToken(e.target.value)}
-                placeholder="••••••••••••••••"
+                placeholder="変更する場合のみ入力"
               />
+              <p className="text-xs text-gray-500">
+                セキュリティのため、既存の値は表示されません。変更する場合のみ入力してください。
+              </p>
             </div>
 
             <div className="space-y-2">
@@ -228,6 +301,107 @@ export default function SettingsPage() {
             </div>
           </CardContent>
         </Card>
+
+        {/* Endpoint URLs (read-only, only shown if LIFF ID is set) */}
+        {liffId && (
+          <Card>
+            <CardHeader>
+              <CardTitle>LINE設定URL</CardTitle>
+              <CardDescription>
+                LINE Developers Consoleとリッチメニューの設定に使用するURLです
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="bg-blue-50 border border-blue-200 p-4 rounded-md">
+                <p className="text-sm text-blue-900">
+                  <strong>💡 使い方:</strong>{' '}
+                  以下のURLをコピーして、それぞれの場所に設定してください
+                </p>
+              </div>
+
+              {/* LIFF Endpoint URL */}
+              <div className="space-y-2">
+                <Label>1. LIFF Endpoint URL</Label>
+                <div className="flex gap-2">
+                  <Input
+                    value={`https://l-apply.vercel.app/liff/apply?liffId=${liffId}`}
+                    readOnly
+                    className="bg-gray-50 font-mono text-sm"
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    onClick={() => handleCopyUrl(`https://l-apply.vercel.app/liff/apply?liffId=${liffId}`, 'endpoint')}
+                  >
+                    {copiedUrl === 'endpoint' ? (
+                      <CheckCircle className="h-4 w-4 text-green-600" />
+                    ) : (
+                      <Copy className="h-4 w-4" />
+                    )}
+                  </Button>
+                </div>
+                <p className="text-xs text-gray-500">
+                  📍 <strong>設定場所:</strong> LINE Developers Console → LIFF → Endpoint URL
+                </p>
+              </div>
+
+              {/* LIFF URL (for Rich Menu) */}
+              <div className="space-y-2">
+                <Label>2. LIFF URL（リッチメニュー用）</Label>
+                <div className="flex gap-2">
+                  <Input
+                    value={`https://liff.line.me/${liffId}`}
+                    readOnly
+                    className="bg-gray-50 font-mono text-sm"
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    onClick={() => handleCopyUrl(`https://liff.line.me/${liffId}`, 'liff')}
+                  >
+                    {copiedUrl === 'liff' ? (
+                      <CheckCircle className="h-4 w-4 text-green-600" />
+                    ) : (
+                      <Copy className="h-4 w-4" />
+                    )}
+                  </Button>
+                </div>
+                <p className="text-xs text-gray-500">
+                  📍 <strong>設定場所:</strong> LINE Official Account Manager → リッチメニュー → アクション
+                </p>
+              </div>
+
+              {/* Webhook URL */}
+              <div className="space-y-2">
+                <Label>3. Webhook URL</Label>
+                <div className="flex gap-2">
+                  <Input
+                    value="https://asia-northeast1-l-apply.cloudfunctions.net/webhook"
+                    readOnly
+                    className="bg-gray-50 font-mono text-sm"
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    onClick={() => handleCopyUrl('https://asia-northeast1-l-apply.cloudfunctions.net/webhook', 'webhook')}
+                  >
+                    {copiedUrl === 'webhook' ? (
+                      <CheckCircle className="h-4 w-4 text-green-600" />
+                    ) : (
+                      <Copy className="h-4 w-4" />
+                    )}
+                  </Button>
+                </div>
+                <p className="text-xs text-gray-500">
+                  📍 <strong>設定場所:</strong> LINE Developers Console → Messaging API → Webhook URL
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Branding */}
         <Card>

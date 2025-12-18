@@ -33,9 +33,13 @@ export async function getOrganizationConfig(
     throw new Error(`Organization data is empty: ${organizationId}`);
   }
 
-  const channelAccessToken = orgData.lineChannelAccessToken || '';
-  const channelSecret = orgData.lineChannelSecret || '';
-  const liffId = orgData.liffId || '';
+  // Support both old structure (settings.branding) and new structure (root level)
+  const settings = orgData.settings || {};
+  const branding = settings.branding || {};
+
+  const channelAccessToken = orgData.lineChannelAccessToken || branding.lineChannelAccessToken || '';
+  const channelSecret = orgData.lineChannelSecret || branding.lineChannelSecret || '';
+  const liffId = orgData.liffId || branding.liffId || '';
 
   if (!channelAccessToken || !channelSecret) {
     throw new Error(

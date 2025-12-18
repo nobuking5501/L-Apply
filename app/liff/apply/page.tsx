@@ -2,11 +2,10 @@
 
 import { useEffect, useState } from 'react';
 import liff from '@line/liff';
-import { collection, query, where, getDocs, limit } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
 import styles from './apply.module.css';
 
-const LIFF_ID = process.env.NEXT_PUBLIC_LIFF_ID || '';
+// LIFF ID is now provided via URL parameter for true multi-tenant support
+// Each organization uses: https://l-apply.vercel.app/liff/apply?liffId=their-liff-id
 const APPLY_API_URL = process.env.NEXT_PUBLIC_APPLY_API_URL || '';
 
 interface EventSlot {
@@ -33,6 +32,8 @@ interface FormData {
 }
 
 export default function ApplyPage() {
+  // Dynamic LIFF ID from URL parameter or fallback to environment variable
+  const [liffId, setLiffId] = useState<string>('');
   const [isLiffReady, setIsLiffReady] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -48,49 +49,47 @@ export default function ApplyPage() {
     consent: true,
   });
 
-  // Fetch active event
+  // Get LIFF ID from URL parameter (required for multi-tenant)
   useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const urlLiffId = params.get('liffId');
+
+      if (!urlLiffId) {
+        // For true multi-tenant: liffId parameter is REQUIRED
+        // Users should access via: https://l-apply.vercel.app/liff/apply?liffId=xxx
+        setError('LIFF IDが指定されていません。正しいURLからアクセスしてください。');
+        setLoadingEvent(false);
+        return;
+      }
+
+      console.log('Using LIFF ID:', urlLiffId, '(from URL parameter)');
+      setLiffId(urlLiffId);
+    }
+  }, []);
+
+  // Fetch active event via API (more secure)
+  useEffect(() => {
+    if (!liffId) return; // Wait for LIFF ID to be set
     const fetchActiveEvent = async () => {
       try {
-        // Get organization ID from LIFF ID
-        const orgsQuery = query(
-          collection(db, 'organizations'),
-          where('liffId', '==', LIFF_ID),
-          limit(1)
-        );
-        const orgsSnapshot = await getDocs(orgsQuery);
+        // Fetch organization and active event via API
+        const response = await fetch(`/api/liff/organization?liffId=${encodeURIComponent(liffId)}`);
 
-        if (orgsSnapshot.empty) {
-          setError('組織情報が見つかりません');
-          setLoadingEvent(false);
-          return;
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.error || 'Failed to fetch organization');
         }
 
-        const organizationId = orgsSnapshot.docs[0].id;
+        const data = await response.json();
 
-        // Get active event for this organization
-        const eventsQuery = query(
-          collection(db, 'events'),
-          where('organizationId', '==', organizationId),
-          where('isActive', '==', true),
-          limit(1)
-        );
-        const eventsSnapshot = await getDocs(eventsQuery);
-
-        if (eventsSnapshot.empty) {
+        if (!data.activeEvent) {
           setError('現在公開中のイベントがありません');
           setLoadingEvent(false);
           return;
         }
 
-        const eventData = eventsSnapshot.docs[0].data();
-        setActiveEvent({
-          id: eventsSnapshot.docs[0].id,
-          title: eventData.title,
-          description: eventData.description,
-          location: eventData.location,
-          slots: eventData.slots || [],
-        });
+        setActiveEvent(data.activeEvent);
       } catch (err) {
         console.error('Error fetching active event:', err);
         setError('イベント情報の取得に失敗しました');
@@ -100,13 +99,15 @@ export default function ApplyPage() {
     };
 
     fetchActiveEvent();
-  }, []);
+  }, [liffId]); // Re-fetch when LIFF ID changes
 
   // Initialize LIFF
   useEffect(() => {
+    if (!liffId) return; // Wait for LIFF ID to be set
+
     const initLiff = async () => {
       try {
-        await liff.init({ liffId: LIFF_ID });
+        await liff.init({ liffId: liffId });
 
         if (!liff.isLoggedIn()) {
           liff.login();
@@ -121,7 +122,7 @@ export default function ApplyPage() {
     };
 
     initLiff();
-  }, []);
+  }, [liffId]); // Re-initialize when LIFF ID changes
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -163,7 +164,7 @@ export default function ApplyPage() {
         },
         body: JSON.stringify({
           idToken,
-          liffId: LIFF_ID,
+          liffId: liffId,
           plan: activeEvent.title,
           slotAt: slotDateTime,
           notes: formData.notes,

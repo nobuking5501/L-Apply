@@ -17,23 +17,38 @@ export function ensureAdminInitialized(): App {
 
   // Initialize with service account or default credentials
   try {
+    console.log('🔧 Initializing Firebase Admin...');
+    console.log('Environment check:', {
+      hasServiceAccount: !!process.env.FIREBASE_SERVICE_ACCOUNT,
+      hasGoogleCreds: !!process.env.GOOGLE_APPLICATION_CREDENTIALS,
+      nodeEnv: process.env.NODE_ENV,
+    });
+
     if (process.env.FIREBASE_SERVICE_ACCOUNT) {
+      console.log('✅ Using FIREBASE_SERVICE_ACCOUNT');
       // Parse service account JSON from environment variable
       const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
       adminApp = initializeApp({
         credential: cert(serviceAccount),
       });
+      console.log('✅ Firebase Admin initialized successfully with service account');
     } else if (process.env.GOOGLE_APPLICATION_CREDENTIALS) {
+      console.log('⚠️ Using GOOGLE_APPLICATION_CREDENTIALS (not recommended for Vercel)');
       // Use credentials file path
       adminApp = initializeApp({
         credential: cert(process.env.GOOGLE_APPLICATION_CREDENTIALS),
       });
     } else {
-      // Use default credentials (for local development or Cloud Functions)
-      adminApp = initializeApp();
+      console.error('❌ NO CREDENTIALS FOUND - This will fail on Vercel!');
+      console.error('❌ Please set FIREBASE_SERVICE_ACCOUNT environment variable in Vercel Dashboard');
+      throw new Error('FIREBASE_SERVICE_ACCOUNT environment variable is required');
     }
   } catch (error) {
-    console.error('Failed to initialize Firebase Admin:', error);
+    console.error('❌ Failed to initialize Firebase Admin:', error);
+    if (error instanceof Error) {
+      console.error('Error message:', error.message);
+      console.error('Error stack:', error.stack);
+    }
     throw error;
   }
 
