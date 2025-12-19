@@ -27,8 +27,13 @@ export function verifySignature(
 
 /**
  * Verify LIFF ID token and get user profile
+ * @param idToken LIFF ID token
+ * @param accessToken LINE Channel Access Token (REQUIRED for multi-tenant support)
  */
-export async function verifyIdToken(idToken: string): Promise<{ userId: string; displayName: string }> {
+export async function verifyIdToken(
+  idToken: string,
+  accessToken?: string
+): Promise<{ userId: string; displayName: string }> {
   try {
     // Decode the ID token (without verification for simplicity)
     // In production, you should verify the token with LINE's public key
@@ -39,7 +44,8 @@ export async function verifyIdToken(idToken: string): Promise<{ userId: string; 
     }
 
     // Get user profile from LINE
-    const profile = await getProfile(decoded.sub);
+    // IMPORTANT: Use the organization's access token for multi-tenant support
+    const profile = await getProfile(decoded.sub, accessToken);
 
     return {
       userId: decoded.sub,

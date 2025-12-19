@@ -51,12 +51,27 @@ export const apply = onRequest(
         return;
       }
 
+      // Initialize Firebase
+      ensureFirebaseInitialized();
+
+      // IMPORTANT: Get organization config FIRST for multi-tenant support
+      // We need the organization's LINE Channel Access Token to verify the ID token
+      const organizationId = await firestore.getOrganizationIdByLiffId(body.liffId);
+      if (!organizationId) {
+        res.status(400).json({ error: 'Invalid LIFF ID - organization not found' });
+        return;
+      }
+
+      // Get organization config (includes LINE Channel Access Token)
+      const orgConfig = await getOrganizationConfig(organizationId);
+
       // Verify ID token and get user info
+      // Use the organization's access token for multi-tenant support
       let userId: string;
       let displayName: string;
 
       try {
-        const userInfo = await verifyIdToken(body.idToken);
+        const userInfo = await verifyIdToken(body.idToken, orgConfig.line.channelAccessToken);
         userId = userInfo.userId;
         displayName = userInfo.displayName;
       } catch (error) {
@@ -64,19 +79,6 @@ export const apply = onRequest(
         res.status(401).json({ error: 'Invalid ID token' });
         return;
       }
-
-      // Initialize Firebase
-      ensureFirebaseInitialized();
-
-      // Get organizationId from LIFF ID
-      const organizationId = await firestore.getOrganizationIdByLiffId(body.liffId);
-      if (!organizationId) {
-        res.status(400).json({ error: 'Invalid LIFF ID - organization not found' });
-        return;
-      }
-
-      // Get organization config
-      const orgConfig = await getOrganizationConfig(organizationId);
 
       // Parse slot time
       let slotAt: Timestamp;
