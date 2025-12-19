@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { collection, getDocs, query } from 'firebase/firestore';
+import { collection, getDocs, query, where } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 
 interface Organization {
@@ -11,6 +11,9 @@ interface Organization {
   email?: string;
   liffId: string;
   disabled?: boolean;
+  ownerId?: string;
+  ownerName?: string;
+  ownerEmail?: string;
   subscription: {
     plan: 'test' | 'monitor' | 'regular' | 'pro';
     status: 'active' | 'trial' | 'canceled' | 'past_due';
@@ -47,14 +50,38 @@ export default function OrganizationsPageClient() {
       const snapshot = await getDocs(q);
 
       const orgs: Organization[] = [];
-      snapshot.forEach((doc) => {
+
+      // Fetch organizations and their owner information
+      const fetchPromises = snapshot.docs.map(async (doc) => {
         const data = doc.data();
-        orgs.push({
+
+        // Fetch owner information from users collection
+        let ownerName = '';
+        let ownerEmail = '';
+        if (data.ownerId) {
+          try {
+            const userDoc = await getDocs(
+              query(collection(db, 'users'), where('uid', '==', data.ownerId))
+            );
+            if (!userDoc.empty) {
+              const userData = userDoc.docs[0].data();
+              ownerName = userData.displayName || '';
+              ownerEmail = userData.email || '';
+            }
+          } catch (err) {
+            console.error('Failed to fetch owner info for', doc.id, err);
+          }
+        }
+
+        return {
           id: doc.id,
           name: data.name || '',
           email: data.email || '',
           liffId: data.liffId || '',
           disabled: data.disabled || false,
+          ownerId: data.ownerId || '',
+          ownerName,
+          ownerEmail,
           subscription: data.subscription || {
             plan: 'test',
             status: 'trial',
@@ -72,10 +99,11 @@ export default function OrganizationsPageClient() {
             applicationsThisMonth: 0,
           },
           createdAt: data.createdAt,
-        });
+        };
       });
 
-      setOrganizations(orgs);
+      const organizationsData = await Promise.all(fetchPromises);
+      setOrganizations(organizationsData);
     } catch (err) {
       console.error('Error fetching organizations:', err);
       setError('組織情報の取得に失敗しました');
@@ -238,7 +266,7 @@ export default function OrganizationsPageClient() {
           <thead className="bg-gray-50">
             <tr>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                組織ID
+                氏名
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 プラン
@@ -263,8 +291,11 @@ export default function OrganizationsPageClient() {
                 <td className="px-6 py-4 whitespace-nowrap">
                   <div className="flex items-center space-x-2">
                     <div>
-                      <div className="text-sm font-medium text-gray-900">{org.id}</div>
-                      {org.email && <div className="text-sm text-gray-500">{org.email}</div>}
+                      <div className="text-sm font-medium text-gray-900">
+                        {org.ownerName || org.name || '(未設定)'}
+                      </div>
+                      {org.ownerEmail && <div className="text-sm text-gray-500">{org.ownerEmail}</div>}
+                      <div className="text-xs text-gray-400">ID: {org.id}</div>
                     </div>
                     {org.disabled && (
                       <span className="px-2 py-1 text-xs font-medium bg-red-100 text-red-800 rounded">
