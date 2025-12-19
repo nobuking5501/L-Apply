@@ -51,6 +51,7 @@ export default function ApplyPage() {
 
   // Get LIFF ID from URL parameter (required for multi-tenant)
   useEffect(() => {
+    console.log('[DEBUG] Step 1: Extracting LIFF ID from URL');
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search);
       const urlLiffId = params.get('liffId');
@@ -58,42 +59,58 @@ export default function ApplyPage() {
       if (!urlLiffId) {
         // For true multi-tenant: liffId parameter is REQUIRED
         // Users should access via: https://l-apply.vercel.app/liff/apply?liffId=xxx
+        console.error('[DEBUG] No liffId parameter found in URL');
         setError('LIFF IDが指定されていません。正しいURLからアクセスしてください。');
         setLoadingEvent(false);
         return;
       }
 
-      console.log('Using LIFF ID:', urlLiffId, '(from URL parameter)');
+      console.log('[DEBUG] LIFF ID found:', urlLiffId);
       setLiffId(urlLiffId);
     }
   }, []);
 
   // Fetch active event via API (more secure)
   useEffect(() => {
-    if (!liffId) return; // Wait for LIFF ID to be set
+    if (!liffId) {
+      console.log('[DEBUG] Step 2: Waiting for LIFF ID to be set');
+      return; // Wait for LIFF ID to be set
+    }
+
+    console.log('[DEBUG] Step 2: Fetching active event for LIFF ID:', liffId);
+
     const fetchActiveEvent = async () => {
       try {
+        const apiUrl = `/api/liff/organization?liffId=${encodeURIComponent(liffId)}`;
+        console.log('[DEBUG] Calling API:', apiUrl);
+
         // Fetch organization and active event via API
-        const response = await fetch(`/api/liff/organization?liffId=${encodeURIComponent(liffId)}`);
+        const response = await fetch(apiUrl);
+        console.log('[DEBUG] API response status:', response.status);
 
         if (!response.ok) {
           const errorData = await response.json();
+          console.error('[DEBUG] API error:', errorData);
           throw new Error(errorData.error || 'Failed to fetch organization');
         }
 
         const data = await response.json();
+        console.log('[DEBUG] API response data:', data);
 
         if (!data.activeEvent) {
+          console.warn('[DEBUG] No active event found');
           setError('現在公開中のイベントがありません');
           setLoadingEvent(false);
           return;
         }
 
+        console.log('[DEBUG] Active event found:', data.activeEvent.title);
         setActiveEvent(data.activeEvent);
       } catch (err) {
-        console.error('Error fetching active event:', err);
+        console.error('[DEBUG] Error fetching active event:', err);
         setError('イベント情報の取得に失敗しました');
       } finally {
+        console.log('[DEBUG] Setting loadingEvent to false');
         setLoadingEvent(false);
       }
     };
@@ -103,20 +120,32 @@ export default function ApplyPage() {
 
   // Initialize LIFF
   useEffect(() => {
-    if (!liffId) return; // Wait for LIFF ID to be set
+    if (!liffId) {
+      console.log('[DEBUG] Step 3: Waiting for LIFF ID to be set');
+      return; // Wait for LIFF ID to be set
+    }
+
+    console.log('[DEBUG] Step 3: Initializing LIFF with ID:', liffId);
 
     const initLiff = async () => {
       try {
+        console.log('[DEBUG] Calling liff.init()...');
         await liff.init({ liffId: liffId });
+        console.log('[DEBUG] liff.init() completed successfully');
 
-        if (!liff.isLoggedIn()) {
+        const isLoggedIn = liff.isLoggedIn();
+        console.log('[DEBUG] liff.isLoggedIn():', isLoggedIn);
+
+        if (!isLoggedIn) {
+          console.log('[DEBUG] Not logged in, calling liff.login()');
           liff.login();
           return;
         }
 
+        console.log('[DEBUG] User is logged in, setting isLiffReady to true');
         setIsLiffReady(true);
       } catch (err) {
-        console.error('LIFF initialization failed', err);
+        console.error('[DEBUG] LIFF initialization failed:', err);
         setError('LIFFの初期化に失敗しました');
       }
     };
@@ -195,6 +224,7 @@ export default function ApplyPage() {
   };
 
   if (loadingEvent || !isLiffReady) {
+    console.log('[DEBUG] Showing loading screen - loadingEvent:', loadingEvent, 'isLiffReady:', isLiffReady);
     return (
       <div className={styles.container}>
         <div className={styles.loading}>読み込み中...</div>
