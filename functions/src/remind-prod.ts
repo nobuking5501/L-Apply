@@ -38,16 +38,27 @@ export const remind = onRequest(
             continue;
           }
 
-          // Get organization config if organizationId is present
-          let accessToken: string | undefined = undefined;
-          if (reminder.organizationId) {
-            try {
-              const orgConfig = await getOrganizationConfig(reminder.organizationId);
-              accessToken = orgConfig.line.channelAccessToken;
-            } catch (error) {
-              console.error(`Failed to get organization config for ${reminder.organizationId}:`, error);
-              // Fall back to default config
+          // Get organization config - organizationId is REQUIRED for multi-tenant support
+          if (!reminder.organizationId) {
+            console.error(`❌ Reminder ${reminder.id} is missing organizationId - cannot send. Marking as sent to prevent retries.`);
+            await firestore.markReminderAsSent(reminder.id!);
+            continue;
+          }
+
+          // Get LINE Channel Access Token from organization config
+          let accessToken: string;
+          try {
+            const orgConfig = await getOrganizationConfig(reminder.organizationId);
+            accessToken = orgConfig.line.channelAccessToken;
+
+            if (!accessToken) {
+              throw new Error('Access token is empty');
             }
+          } catch (error) {
+            console.error(`❌ Failed to get LINE credentials for organization ${reminder.organizationId}:`, error);
+            console.error(`Reminder ${reminder.id} cannot be sent. Will retry on next run.`);
+            // Don't mark as sent - will retry next time
+            continue;
           }
 
           // Send reminder

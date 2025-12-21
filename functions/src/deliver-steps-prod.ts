@@ -44,16 +44,27 @@ export const deliverSteps = onRequest(
             continue;
           }
 
-          // Get organization config if organizationId is present
-          let accessToken: string | undefined = undefined;
-          if (delivery.organizationId) {
-            try {
-              const orgConfig = await getOrganizationConfig(delivery.organizationId);
-              accessToken = orgConfig.line.channelAccessToken;
-            } catch (error) {
-              console.error(`Failed to get organization config for ${delivery.organizationId}:`, error);
-              // Fall back to default config
+          // Get organization config - organizationId is REQUIRED for multi-tenant support
+          if (!delivery.organizationId) {
+            console.error(`❌ Step delivery ${delivery.id} is missing organizationId - cannot send. Marking as skipped.`);
+            await stepDelivery.markStepDeliveryAsSkipped(db, delivery.id!);
+            continue;
+          }
+
+          // Get LINE Channel Access Token from organization config
+          let accessToken: string;
+          try {
+            const orgConfig = await getOrganizationConfig(delivery.organizationId);
+            accessToken = orgConfig.line.channelAccessToken;
+
+            if (!accessToken) {
+              throw new Error('Access token is empty');
             }
+          } catch (error) {
+            console.error(`❌ Failed to get LINE credentials for organization ${delivery.organizationId}:`, error);
+            console.error(`Step delivery ${delivery.id} cannot be sent. Will retry on next run.`);
+            // Don't mark as skipped - will retry next time
+            continue;
           }
 
           // Send step delivery message
