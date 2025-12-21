@@ -200,11 +200,8 @@ async function handleTextMessage(event: WebhookEvent, organizationId: string): P
         if (text === '個別相談希望' || text === '個別相談' || text === '相談希望') {
           await firestore.createConsultationRequest(userId, organizationId);
         }
-      } else {
-        // Unknown command
-        const message = messages.generateUnknownCommandMessage();
-        await replyMessage(replyToken, [createTextMessage(message)], orgConfig.line.channelAccessToken);
       }
+      // If no auto-reply message is found, do nothing (don't send any response)
     }
   } catch (error) {
     console.error('Error handling text message:', error);
