@@ -38,8 +38,28 @@ async function verifySignatureAndGetOrganization(
 
   // Try to verify signature with each organization's channelSecret
   for (const orgDoc of orgsSnapshot.docs) {
+    const orgId = orgDoc.id;
     const orgData = orgDoc.data();
-    const channelSecret = orgData.lineChannelSecret;
+
+    // Try to get channelSecret from organization_secrets first (new method)
+    let channelSecret = '';
+
+    try {
+      const secretsDoc = await db.collection('organization_secrets').doc(orgId).get();
+      if (secretsDoc.exists) {
+        const secretsData = secretsDoc.data();
+        channelSecret = secretsData?.lineChannelSecret || '';
+      }
+    } catch (error) {
+      console.warn(`Failed to fetch organization_secrets for ${orgId}`, error);
+    }
+
+    // Fallback to old structure (backward compatibility)
+    if (!channelSecret) {
+      const settings = orgData.settings || {};
+      const branding = settings.branding || {};
+      channelSecret = orgData.lineChannelSecret || branding.lineChannelSecret || '';
+    }
 
     if (!channelSecret) {
       continue;
@@ -47,7 +67,7 @@ async function verifySignatureAndGetOrganization(
 
     // Verify signature with this organization's secret
     if (verifySignature(body, signature, channelSecret)) {
-      return orgDoc.id;
+      return orgId;
     }
   }
 
