@@ -37,9 +37,30 @@ export async function getOrganizationConfig(
   const settings = orgData.settings || {};
   const branding = settings.branding || {};
 
-  const channelAccessToken = orgData.lineChannelAccessToken || branding.lineChannelAccessToken || '';
-  const channelSecret = orgData.lineChannelSecret || branding.lineChannelSecret || '';
+  // Get LIFF ID from organization document
   const liffId = orgData.liffId || branding.liffId || '';
+
+  // Get LINE credentials from organization_secrets collection (for security)
+  let channelAccessToken = '';
+  let channelSecret = '';
+
+  try {
+    const secretsDoc = await db.collection('organization_secrets').doc(organizationId).get();
+
+    if (secretsDoc.exists) {
+      const secretsData = secretsDoc.data();
+      channelAccessToken = secretsData?.lineChannelAccessToken || '';
+      channelSecret = secretsData?.lineChannelSecret || '';
+    }
+  } catch (error) {
+    console.warn(`Failed to fetch organization_secrets for ${organizationId}, trying fallback`, error);
+  }
+
+  // Fallback to old structure in organizations collection (backward compatibility)
+  if (!channelAccessToken || !channelSecret) {
+    channelAccessToken = orgData.lineChannelAccessToken || branding.lineChannelAccessToken || '';
+    channelSecret = orgData.lineChannelSecret || branding.lineChannelSecret || '';
+  }
 
   if (!channelAccessToken || !channelSecret) {
     throw new Error(
