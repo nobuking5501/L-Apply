@@ -26,53 +26,50 @@ export default function SettingsPage() {
   const [companyName, setCompanyName] = useState('');
   const [primaryColor, setPrimaryColor] = useState('#3B82F6');
 
+  // Secrets metadata state
+  const [secretsMetadata, setSecretsMetadata] = useState<any>(null);
+  const [showFullSecret, setShowFullSecret] = useState(false);
+  const [showFullToken, setShowFullToken] = useState(false);
+  const [testingConnection, setTestingConnection] = useState(false);
+  const [connectionResult, setConnectionResult] = useState<any>(null);
+
   useEffect(() => {
-    if (!userData?.organizationId) return;
+    if (!userData?.organizationId || !user) return;
 
     const fetchOrganization = async () => {
       try {
-        // Read public organization info directly from Firestore (allowed by security rules)
-        const { doc, getDoc } = await import('firebase/firestore');
-        const { db } = await import('@/lib/firebase');
+        // Fetch from API to get both organization data and secrets metadata
+        const idToken = await user.getIdToken();
+        const response = await fetch('/api/settings', {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${idToken}`,
+          },
+        });
 
-        const orgDoc = await getDoc(doc(db, 'organizations', userData.organizationId));
+        if (!response.ok) {
+          throw new Error('Failed to fetch settings');
+        }
 
-        if (orgDoc.exists()) {
-          const orgData = { id: orgDoc.id, ...orgDoc.data() } as any;
+        const data = await response.json();
+
+        if (data.success && data.organization) {
+          const orgData = data.organization;
           setOrganization(orgData);
 
-          // Support both old structure (settings.branding) and new structure (root level)
-          const settings = orgData.settings || {};
-          const branding = settings.branding || {};
-
-          // DEBUG: Log the data to see what we're getting
-          console.log('=== DEBUG: Organization Data ===');
-          console.log('Full orgData:', orgData);
-          console.log('settings:', settings);
-          console.log('branding:', branding);
-          console.log('lineChannelId from root:', orgData.lineChannelId);
-          console.log('lineChannelId from settings:', settings.lineChannelId);
-          console.log('lineChannelId from branding:', branding.lineChannelId);
-          console.log('liffId from root:', orgData.liffId);
-          console.log('liffId from settings:', settings.liffId);
-          console.log('liffId from branding:', branding.liffId);
-          console.log('companyName from root:', orgData.companyName);
-          console.log('companyName from branding:', branding.companyName);
-
-          // Set form values - check all possible locations for backward compatibility
+          // Set form values
           setOrgName(orgData.name || '');
-          setLineChannelId(orgData.lineChannelId || settings.lineChannelId || branding.lineChannelId || '');
-          setLineChannelSecret(''); // Secrets are in organization_secrets, not shown
-          setLineAccessToken(''); // Secrets are in organization_secrets, not shown
-          setLiffId(orgData.liffId || settings.liffId || branding.liffId || '');
-          setCompanyName(orgData.companyName || branding.companyName || '');
-          setPrimaryColor(orgData.primaryColor || branding.primaryColor || '#3B82F6');
+          setLineChannelId(orgData.lineChannelId || '');
+          setLineChannelSecret(''); // Secrets are never shown, only for updating
+          setLineAccessToken(''); // Secrets are never shown, only for updating
+          setLiffId(orgData.liffId || '');
+          setCompanyName(orgData.companyName || '');
+          setPrimaryColor(orgData.primaryColor || '#3B82F6');
 
-          // DEBUG: Log what we set
-          console.log('=== DEBUG: Set Values ===');
-          console.log('Set lineChannelId:', orgData.lineChannelId || settings.lineChannelId || branding.lineChannelId || '');
-          console.log('Set liffId:', orgData.liffId || settings.liffId || branding.liffId || '');
-          console.log('Set companyName:', orgData.companyName || branding.companyName || '');
+          // Set secrets metadata (for display purposes)
+          if (data.secretsMetadata) {
+            setSecretsMetadata(data.secretsMetadata);
+          }
         }
       } catch (error) {
         console.error('Error fetching organization:', error);
@@ -83,7 +80,41 @@ export default function SettingsPage() {
     };
 
     fetchOrganization();
-  }, [userData]);
+  }, [userData, user]);
+
+  const handleTestConnection = async () => {
+    if (!user) return;
+
+    setTestingConnection(true);
+    setConnectionResult(null);
+
+    try {
+      const idToken = await user.getIdToken();
+
+      const response = await fetch('/api/line/verify-connection', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${idToken}`,
+        },
+      });
+
+      const result = await response.json();
+      setConnectionResult(result);
+
+      // Auto-hide success message after 5 seconds
+      if (result.success) {
+        setTimeout(() => setConnectionResult(null), 5000);
+      }
+    } catch (error) {
+      console.error('Error testing connection:', error);
+      setConnectionResult({
+        success: false,
+        message: '接続テストに失敗しました。',
+      });
+    } finally {
+      setTestingConnection(false);
+    }
+  };
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -262,32 +293,169 @@ export default function SettingsPage() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="lineChannelSecret">LINE Channel Secret</Label>
+              <div className="flex items-center justify-between">
+                <Label htmlFor="lineChannelSecret">LINE Channel Secret</Label>
+                {secretsMetadata && (
+                  <div className="text-xs text-gray-500">
+                    {secretsMetadata.hasChannelSecret ? (
+                      <span className="text-green-600 font-medium">✅ 設定済み ({secretsMetadata.channelSecretLength}文字)</span>
+                    ) : (
+                      <span className="text-amber-600 font-medium">❌ 未設定</span>
+                    )}
+                  </div>
+                )}
+              </div>
+              {secretsMetadata?.hasChannelSecret && secretsMetadata.channelSecretMasked && (
+                <div className="bg-gray-50 px-3 py-2 rounded-md border border-gray-200">
+                  <p className="text-xs text-gray-600 font-mono">
+                    {secretsMetadata.channelSecretMasked}
+                  </p>
+                  {secretsMetadata.secretsUpdatedAt && (
+                    <p className="text-xs text-gray-500 mt-1">
+                      最終更新: {new Date(secretsMetadata.secretsUpdatedAt._seconds * 1000).toLocaleString('ja-JP')}
+                    </p>
+                  )}
+                </div>
+              )}
               <Input
                 id="lineChannelSecret"
-                type="password"
+                type={showFullSecret ? "text" : "password"}
                 value={lineChannelSecret}
-                onChange={(e) => setLineChannelSecret(e.target.value)}
+                onChange={(e) => {
+                  setLineChannelSecret(e.target.value);
+                  if (showFullSecret) {
+                    setTimeout(() => setShowFullSecret(false), 5000);
+                  }
+                }}
                 placeholder="変更する場合のみ入力"
               />
-              <p className="text-xs text-gray-500">
-                セキュリティのため、既存の値は表示されません。変更する場合のみ入力してください。
-              </p>
+              <div className="flex items-center justify-between">
+                <p className="text-xs text-gray-500">
+                  変更する場合のみ入力してください
+                </p>
+                {lineChannelSecret && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      setShowFullSecret(!showFullSecret);
+                      if (!showFullSecret) {
+                        setTimeout(() => setShowFullSecret(false), 5000);
+                      }
+                    }}
+                    className="text-xs"
+                  >
+                    {showFullSecret ? '🙈 非表示' : '👁️ 表示 (5秒間)'}
+                  </Button>
+                )}
+              </div>
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="lineAccessToken">LINE Channel Access Token</Label>
+              <div className="flex items-center justify-between">
+                <Label htmlFor="lineAccessToken">LINE Channel Access Token</Label>
+                {secretsMetadata && (
+                  <div className="text-xs text-gray-500">
+                    {secretsMetadata.hasChannelAccessToken ? (
+                      <span className="text-green-600 font-medium">✅ 設定済み ({secretsMetadata.channelAccessTokenLength}文字)</span>
+                    ) : (
+                      <span className="text-amber-600 font-medium">❌ 未設定</span>
+                    )}
+                  </div>
+                )}
+              </div>
+              {secretsMetadata?.hasChannelAccessToken && secretsMetadata.channelAccessTokenMasked && (
+                <div className="bg-gray-50 px-3 py-2 rounded-md border border-gray-200">
+                  <p className="text-xs text-gray-600 font-mono">
+                    {secretsMetadata.channelAccessTokenMasked}
+                  </p>
+                  {secretsMetadata.secretsUpdatedAt && (
+                    <p className="text-xs text-gray-500 mt-1">
+                      最終更新: {new Date(secretsMetadata.secretsUpdatedAt._seconds * 1000).toLocaleString('ja-JP')}
+                    </p>
+                  )}
+                </div>
+              )}
               <Input
                 id="lineAccessToken"
-                type="password"
+                type={showFullToken ? "text" : "password"}
                 value={lineAccessToken}
-                onChange={(e) => setLineAccessToken(e.target.value)}
+                onChange={(e) => {
+                  setLineAccessToken(e.target.value);
+                  if (showFullToken) {
+                    setTimeout(() => setShowFullToken(false), 5000);
+                  }
+                }}
                 placeholder="変更する場合のみ入力"
               />
-              <p className="text-xs text-gray-500">
-                セキュリティのため、既存の値は表示されません。変更する場合のみ入力してください。
-              </p>
+              <div className="flex items-center justify-between">
+                <p className="text-xs text-gray-500">
+                  変更する場合のみ入力してください
+                </p>
+                {lineAccessToken && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      setShowFullToken(!showFullToken);
+                      if (!showFullToken) {
+                        setTimeout(() => setShowFullToken(false), 5000);
+                      }
+                    }}
+                    className="text-xs"
+                  >
+                    {showFullToken ? '🙈 非表示' : '👁️ 表示 (5秒間)'}
+                  </Button>
+                )}
+              </div>
             </div>
+
+            {/* Connection Test */}
+            {secretsMetadata?.hasChannelAccessToken && (
+              <div className="pt-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={handleTestConnection}
+                  disabled={testingConnection}
+                  className="w-full"
+                >
+                  {testingConnection ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600 mr-2"></div>
+                      接続テスト中...
+                    </>
+                  ) : (
+                    <>
+                      🔌 LINE API 接続テスト
+                    </>
+                  )}
+                </Button>
+
+                {connectionResult && (
+                  <div className={`mt-3 p-3 rounded-md border ${
+                    connectionResult.success
+                      ? 'bg-green-50 border-green-200 text-green-800'
+                      : 'bg-red-50 border-red-200 text-red-800'
+                  }`}>
+                    <p className="text-sm font-medium">{connectionResult.message}</p>
+                    {connectionResult.botInfo && (
+                      <div className="mt-2 text-xs">
+                        <p>ボット名: {connectionResult.botInfo.displayName}</p>
+                        {connectionResult.botInfo.basicId && (
+                          <p>Basic ID: {connectionResult.botInfo.basicId}</p>
+                        )}
+                      </div>
+                    )}
+                    {connectionResult.details && (
+                      <p className="text-xs mt-1">{connectionResult.details}</p>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
 
             <div className="space-y-2">
               <Label htmlFor="liffId">LIFF ID</Label>

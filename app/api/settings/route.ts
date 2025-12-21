@@ -47,6 +47,19 @@ async function verifyAuthToken(request: NextRequest) {
 }
 
 /**
+ * Helper function to mask sensitive strings
+ * Shows first 8 and last 8 characters, masks the middle
+ */
+function maskString(str: string): string {
+  if (!str) return '';
+  if (str.length <= 16) {
+    // For short strings, show first 4 and last 4
+    return `${str.substring(0, 4)}...${str.substring(str.length - 4)}`;
+  }
+  return `${str.substring(0, 8)}...${str.substring(str.length - 8)}`;
+}
+
+/**
  * GET /api/settings
  * Fetch organization settings (public info only)
  */
@@ -73,7 +86,41 @@ export async function GET(request: NextRequest) {
 
     const orgData = orgDoc.data();
 
-    // Return public organization info (excluding secrets)
+    // Fetch secrets metadata (NOT the actual secrets, just metadata)
+    let secretsMetadata = {
+      hasChannelSecret: false,
+      hasChannelAccessToken: false,
+      channelSecretMasked: '',
+      channelAccessTokenMasked: '',
+      channelSecretLength: 0,
+      channelAccessTokenLength: 0,
+      secretsUpdatedAt: null,
+    };
+
+    try {
+      const secretsDoc = await db.collection('organization_secrets').doc(userData.organizationId).get();
+
+      if (secretsDoc.exists) {
+        const secretsData = secretsDoc.data();
+        const channelSecret = secretsData?.lineChannelSecret || '';
+        const channelAccessToken = secretsData?.lineChannelAccessToken || '';
+
+        secretsMetadata = {
+          hasChannelSecret: !!channelSecret,
+          hasChannelAccessToken: !!channelAccessToken,
+          channelSecretMasked: channelSecret ? maskString(channelSecret) : '',
+          channelAccessTokenMasked: channelAccessToken ? maskString(channelAccessToken) : '',
+          channelSecretLength: channelSecret ? channelSecret.length : 0,
+          channelAccessTokenLength: channelAccessToken ? channelAccessToken.length : 0,
+          secretsUpdatedAt: secretsData?.updatedAt || null,
+        };
+      }
+    } catch (error) {
+      // If organization_secrets doesn't exist or can't be read, continue with empty metadata
+      console.warn(`Could not fetch secrets metadata for org ${userData.organizationId}:`, error);
+    }
+
+    // Return public organization info (excluding actual secrets)
     return NextResponse.json({
       success: true,
       organization: {
@@ -85,6 +132,7 @@ export async function GET(request: NextRequest) {
         lineChannelId: orgData?.lineChannelId,
         plan: orgData?.plan,
       },
+      secretsMetadata, // Add secrets metadata (masked, not actual secrets)
     });
   } catch (error) {
     console.error('Error fetching settings:', error);
