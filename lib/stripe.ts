@@ -12,6 +12,6 @@ if (!stripeSecretKey) {
 // Initialize Stripe with API version
 console.log('[Stripe] Initializing Stripe with key:', stripeSecretKey.substring(0, 7) + '...');
 export const stripe = new Stripe(stripeSecretKey, {
-  apiVersion: '2025-10-29.clover',
+  apiVersion: '2024-12-18.acacia',
   typescript: true,
 });
