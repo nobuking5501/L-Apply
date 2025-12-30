@@ -1,16 +1,19 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { collection, query, where, getDocs, orderBy, limit } from 'firebase/firestore';
+import { collection, query, where, getDocs, orderBy, limit, doc, getDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { useAuth } from '@/contexts/AuthContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Calendar, Users, Send, TrendingUp } from 'lucide-react';
-import type { Event, Application, StepDelivery } from '@/types';
+import { Calendar, Users, Send, TrendingUp, AlertCircle } from 'lucide-react';
+import Link from 'next/link';
+import type { Event, Application, StepDelivery, Organization } from '@/types';
 
 export default function DashboardPage() {
-  const { userData } = useAuth();
+  const { userData, user } = useAuth();
   const [loading, setLoading] = useState(true);
+  const [organization, setOrganization] = useState<Organization | null>(null);
+  const [showLineSetupWarning, setShowLineSetupWarning] = useState(false);
   const [stats, setStats] = useState({
     totalEvents: 0,
     activeEvents: 0,
@@ -23,11 +26,61 @@ export default function DashboardPage() {
   const [recentApplications, setRecentApplications] = useState<Application[]>([]);
 
   useEffect(() => {
-    if (!userData?.organizationId) return;
+    if (!userData?.organizationId || !user) return;
 
     const fetchDashboardData = async () => {
       try {
         const orgId = userData.organizationId;
+
+        // Fetch organization data to check LINE setup
+        const orgDoc = await getDoc(doc(db, 'organizations', orgId));
+        if (orgDoc.exists()) {
+          const orgData = orgDoc.data() as Organization;
+          setOrganization(orgData);
+
+          // Check if LINE credentials are set up
+          const hasLineSetup = !!(orgData.lineChannelId && orgData.liffId);
+
+          // デバッグログ
+          console.log('=== LINE Setup Debug ===');
+          console.log('Organization ID:', userData.organizationId);
+          console.log('lineChannelId:', orgData.lineChannelId);
+          console.log('liffId:', orgData.liffId);
+          console.log('hasLineSetup:', hasLineSetup);
+
+          // Initially set warning based on organization data
+          let shouldShowWarning = !hasLineSetup;
+          console.log('Initial shouldShowWarning:', shouldShowWarning);
+
+          // Check secrets via API
+          if (user) {
+            try {
+              const idToken = await user.getIdToken();
+              const response = await fetch('/api/settings', {
+                method: 'GET',
+                headers: {
+                  'Authorization': `Bearer ${idToken}`,
+                },
+              });
+
+              if (response.ok) {
+                const data = await response.json();
+                const hasSecrets = data.secretsMetadata?.hasChannelSecret &&
+                                   data.secretsMetadata?.hasChannelAccessToken;
+
+                // Show warning if any LINE credential is missing
+                shouldShowWarning = !hasLineSetup || !hasSecrets;
+              }
+            } catch (error) {
+              console.error('Error checking LINE setup:', error);
+            }
+          }
+
+          // Set the warning state (will be true if org data incomplete OR API check failed/returned incomplete)
+          console.log('Final shouldShowWarning:', shouldShowWarning);
+          console.log('======================');
+          setShowLineSetupWarning(shouldShowWarning);
+        }
 
         // Fetch events
         const eventsQuery = query(
@@ -94,7 +147,7 @@ export default function DashboardPage() {
     };
 
     fetchDashboardData();
-  }, [userData]);
+  }, [userData, user]);
 
   if (loading) {
     return (
@@ -142,7 +195,36 @@ export default function DashboardPage() {
   ];
 
   return (
-    <div className="space-y-8">
+    <div className="relative space-y-8">
+      {/* LINE Setup Blocking Overlay */}
+      {showLineSetupWarning && (
+        <div className="fixed inset-0 bg-white/60 backdrop-blur-sm z-20 flex items-center justify-center">
+          <Card className="max-w-md w-full mx-4 border-amber-300 bg-white shadow-2xl">
+            <CardContent className="p-8">
+              <div className="text-center">
+                <div className="mx-auto flex items-center justify-center h-16 w-16 rounded-full bg-amber-100 mb-4">
+                  <AlertCircle className="h-8 w-8 text-amber-600" />
+                </div>
+                <h3 className="text-xl font-bold text-gray-900 mb-3">
+                  LINE連携の設定が必要です
+                </h3>
+                <p className="text-sm text-gray-600 mb-6">
+                  L-Applyの機能を使用するには、設定画面でLINE Messaging APIの認証情報を設定する必要があります。
+                  <br /><br />
+                  設定が完了するまで、ダッシュボードの機能はご利用いただけません。
+                </p>
+                <Link
+                  href="/dashboard/settings"
+                  className="inline-flex items-center justify-center w-full px-6 py-3 border border-transparent text-base font-medium rounded-md text-white bg-amber-600 hover:bg-amber-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-amber-500 transition-colors"
+                >
+                  設定画面を開く
+                </Link>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
       {/* Stats Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         {statCards.map((stat) => {
