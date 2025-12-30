@@ -98,6 +98,8 @@ export default function SettingsPage() {
               liffId: orgData.liffId,
               lineChannelId: orgData.lineChannelId,
               plan: orgData.plan,
+              ownerId: orgData.ownerId,
+              createdAt: orgData.createdAt,
               addons: orgData.addons || {},
             } as Organization);
 
