@@ -9,7 +9,7 @@ import {
   onAuthStateChanged,
   sendPasswordResetEmail,
 } from 'firebase/auth';
-import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, getDoc, setDoc, serverTimestamp, Timestamp } from 'firebase/firestore';
 import { auth, db } from '@/lib/firebase';
 
 interface UserData {
@@ -78,12 +78,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const signUp = async (email: string, password: string, displayName: string, plan: string = 'test') => {
+    let createdUser: User | null = null;
+
     try {
+      console.log('📝 Starting signup process...');
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-      const user = userCredential.user;
+      createdUser = userCredential.user;
+      console.log('✅ Firebase Auth user created:', createdUser.uid);
 
       // Create organization for new user
-      const orgId = `org_${user.uid}`;
+      const orgId = `org_${createdUser.uid}`;
       const orgDocRef = doc(db, 'organizations', orgId);
 
       // Define plan limits based on selected plan
@@ -128,20 +132,33 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       };
 
       const now = serverTimestamp();
-      const trialEnd = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000); // 14 days from now
+      // Convert to Firestore Timestamp for consistency
+      const trialEndDate = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000); // 14 days from now
+      const trialEndTimestamp = Timestamp.fromDate(trialEndDate);
 
+      console.log('📝 Creating organization document...');
       await setDoc(orgDocRef, {
         name: `${displayName}の組織`,
+        plan: plan, // Add plan field at root level for consistency
         createdAt: now,
         updatedAt: now,
-        ownerId: user.uid,
+        ownerId: createdUser.uid,
+        // LINE integration fields (empty by default, to be configured in settings)
+        // NOTE: lineChannelSecret and lineChannelAccessToken are stored in organization_secrets collection
+        lineChannelId: '',
+        liffId: '',
+        // Branding fields
+        companyName: '',
+        primaryColor: '#3B82F6',
+        // Addons field (for support service and other add-ons)
+        addons: {},
         subscription: {
           plan: plan,
           status: plan === 'test' ? 'trial' : 'active',
           limits: getPlanLimits(plan),
-          trialEndsAt: plan === 'test' ? trialEnd : null,
+          trialEndsAt: plan === 'test' ? trialEndTimestamp : null,
           currentPeriodStart: now,
-          currentPeriodEnd: trialEnd,
+          currentPeriodEnd: trialEndTimestamp,
         },
         usage: {
           eventsCount: 0,
@@ -151,22 +168,39 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           lastResetAt: now,
         },
       });
+      console.log('✅ Organization document created:', orgId);
 
       // Create user document
-      const userDocRef = doc(db, 'users', user.uid);
+      console.log('📝 Creating user document...');
+      const userDocRef = doc(db, 'users', createdUser.uid);
       await setDoc(userDocRef, {
-        uid: user.uid,
-        email: user.email,
+        uid: createdUser.uid,
+        email: createdUser.email,
         displayName,
         organizationId: orgId,
         role: 'owner',
         createdAt: now,
       });
+      console.log('✅ User document created:', createdUser.uid);
 
-      // Wait a moment for Firestore to propagate
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      // Wait for Firestore to propagate (increased to 2 seconds for reliability)
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      console.log('✅ Signup process completed successfully');
     } catch (error) {
-      console.error('SignUp error:', error);
+      console.error('❌ SignUp error:', error);
+
+      // If user was created in Firebase Auth but Firestore failed, clean up
+      if (createdUser) {
+        console.warn('⚠️ Cleaning up incomplete account...');
+        try {
+          await createdUser.delete();
+          console.log('✅ Incomplete Firebase Auth account deleted');
+        } catch (deleteError) {
+          console.error('❌ Failed to delete incomplete account:', deleteError);
+          console.error('⚠️ Manual cleanup required for UID:', createdUser.uid);
+        }
+      }
+
       throw error;
     }
   };

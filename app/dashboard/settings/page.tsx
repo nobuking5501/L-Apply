@@ -8,6 +8,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Save, AlertCircle, Copy, CheckCircle } from 'lucide-react';
 import type { Organization } from '@/types';
+import SupportServiceOverlay from '@/components/SupportServiceOverlay';
+import Link from 'next/link';
 
 export default function SettingsPage() {
   const { user, userData } = useAuth(); // Get user from AuthContext
@@ -16,6 +18,7 @@ export default function SettingsPage() {
   const [success, setSuccess] = useState(false);
   const [organization, setOrganization] = useState<Organization | null>(null);
   const [copiedUrl, setCopiedUrl] = useState<string | null>(null);
+  const [hasPurchasedSupport, setHasPurchasedSupport] = useState(false);
 
   // Form state
   const [orgName, setOrgName] = useState('');
@@ -38,7 +41,7 @@ export default function SettingsPage() {
 
     const fetchOrganization = async () => {
       try {
-        // Fetch from API to get both organization data and secrets metadata
+        // Try to fetch from API first to get both organization data and secrets metadata
         const idToken = await user.getIdToken();
         const response = await fetch('/api/settings', {
           method: 'GET',
@@ -48,7 +51,7 @@ export default function SettingsPage() {
         });
 
         if (!response.ok) {
-          throw new Error('Failed to fetch settings');
+          throw new Error('Failed to fetch settings from API');
         }
 
         const data = await response.json();
@@ -70,10 +73,115 @@ export default function SettingsPage() {
           if (data.secretsMetadata) {
             setSecretsMetadata(data.secretsMetadata);
           }
+
+          // Check if support addon is purchased
+          setHasPurchasedSupport(orgData.addons?.support?.purchased === true);
         }
       } catch (error) {
-        console.error('Error fetching organization:', error);
-        alert('設定の読み込みに失敗しました');
+        console.error('Error fetching organization from API, falling back to Firestore:', error);
+
+        // Fallback: Fetch directly from Firestore using client SDK
+        try {
+          const { doc, getDoc } = await import('firebase/firestore');
+          const { db } = await import('@/lib/firebase');
+
+          const orgRef = doc(db, 'organizations', userData.organizationId);
+          const orgSnap = await getDoc(orgRef);
+
+          if (orgSnap.exists()) {
+            const orgData = orgSnap.data();
+            setOrganization({
+              id: orgSnap.id,
+              name: orgData.name,
+              companyName: orgData.companyName,
+              primaryColor: orgData.primaryColor,
+              liffId: orgData.liffId,
+              lineChannelId: orgData.lineChannelId,
+              plan: orgData.plan,
+              addons: orgData.addons || {},
+            } as Organization);
+
+            // Set form values
+            setOrgName(orgData.name || '');
+            setLineChannelId(orgData.lineChannelId || '');
+            setLineChannelSecret('');
+            setLineAccessToken('');
+            setLiffId(orgData.liffId || '');
+            setCompanyName(orgData.companyName || '');
+            setPrimaryColor(orgData.primaryColor || '#3B82F6');
+
+            // Check if support addon is purchased (from Firestore)
+            setHasPurchasedSupport(orgData.addons?.support?.purchased === true);
+
+            console.log('✅ Fallback: Organization data fetched from Firestore, hasPurchasedSupport:', orgData.addons?.support?.purchased === true);
+
+            // Fetch secrets metadata from organization_secrets collection
+            // Note: This will fail with permission error (by design), which is handled below
+            try {
+              const secretsRef = doc(db, 'organization_secrets', userData.organizationId);
+              const secretsSnap = await getDoc(secretsRef);
+
+              if (secretsSnap.exists()) {
+                const secretsData = secretsSnap.data();
+                const channelSecret = secretsData?.lineChannelSecret || '';
+                const channelAccessToken = secretsData?.lineChannelAccessToken || '';
+
+                // Helper function to mask string (same as API)
+                const maskString = (str: string): string => {
+                  if (!str) return '';
+                  if (str.length <= 16) {
+                    return `${str.substring(0, 4)}...${str.substring(str.length - 4)}`;
+                  }
+                  return `${str.substring(0, 8)}...${str.substring(str.length - 8)}`;
+                };
+
+                setSecretsMetadata({
+                  hasChannelSecret: !!channelSecret,
+                  hasChannelAccessToken: !!channelAccessToken,
+                  channelSecretMasked: channelSecret ? maskString(channelSecret) : '',
+                  channelAccessTokenMasked: channelAccessToken ? maskString(channelAccessToken) : '',
+                  channelSecretLength: channelSecret ? channelSecret.length : 0,
+                  channelAccessTokenLength: channelAccessToken ? channelAccessToken.length : 0,
+                  secretsUpdatedAt: secretsData?.updatedAt || null,
+                });
+
+                console.log('✅ Fallback: Secrets metadata fetched from Firestore');
+              } else {
+                // No secrets document, set empty metadata
+                setSecretsMetadata({
+                  hasChannelSecret: false,
+                  hasChannelAccessToken: false,
+                  channelSecretMasked: '',
+                  channelAccessTokenMasked: '',
+                  channelSecretLength: 0,
+                  channelAccessTokenLength: 0,
+                  secretsUpdatedAt: null,
+                });
+                console.log('ℹ️ Fallback: No secrets document found (not yet configured)');
+              }
+            } catch (secretsError: any) {
+              // Permission error is expected - organization_secrets is server-side only
+              if (secretsError?.code === 'permission-denied') {
+                console.log('ℹ️ Secrets metadata not accessible from client (server-side only for security)');
+              } else {
+                console.warn('Could not fetch secrets metadata:', secretsError?.message || secretsError);
+              }
+
+              // Set empty metadata (secrets will show as "not configured")
+              setSecretsMetadata({
+                hasChannelSecret: false,
+                hasChannelAccessToken: false,
+                channelSecretMasked: '',
+                channelAccessTokenMasked: '',
+                channelSecretLength: 0,
+                channelAccessTokenLength: 0,
+                secretsUpdatedAt: null,
+              });
+            }
+          }
+        } catch (firestoreError) {
+          console.error('Error fetching from Firestore:', firestoreError);
+        }
       } finally {
         setLoading(false);
       }
@@ -136,6 +244,9 @@ export default function SettingsPage() {
         primaryColor,
       };
 
+      // Check if secrets need to be updated
+      const hasSecretUpdates = lineChannelSecret || lineAccessToken;
+
       // Only include secrets if they've been changed (not empty)
       if (lineChannelSecret) {
         updateData.lineChannelSecret = lineChannelSecret;
@@ -144,27 +255,60 @@ export default function SettingsPage() {
         updateData.lineChannelAccessToken = lineAccessToken;
       }
 
-      // Update settings via API
-      const response = await fetch('/api/settings', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${idToken}`,
-        },
-        body: JSON.stringify(updateData),
-      });
+      // Try to update settings via API first
+      try {
+        const response = await fetch('/api/settings', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${idToken}`,
+          },
+          body: JSON.stringify(updateData),
+        });
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to save settings');
+        if (!response.ok) {
+          throw new Error('API request failed');
+        }
+
+        console.log('✅ Settings saved via API');
+        setSuccess(true);
+        setTimeout(() => setSuccess(false), 3000);
+
+        // Clear secret fields after successful save
+        setLineChannelSecret('');
+        setLineAccessToken('');
+      } catch (apiError) {
+        console.error('API save failed, using Firestore fallback:', apiError);
+
+        // Fallback: Save directly to Firestore
+        if (hasSecretUpdates) {
+          alert('⚠️ セキュリティ上の理由により、LINE認証情報の更新にはサーバーAPIが必要です。\n\n他の設定のみ保存します。');
+        }
+
+        const { doc, updateDoc, Timestamp } = await import('firebase/firestore');
+        const { db } = await import('@/lib/firebase');
+
+        // Update public organization info only (no secrets)
+        const orgRef = doc(db, 'organizations', userData.organizationId);
+        await updateDoc(orgRef, {
+          name: orgName.trim(),
+          lineChannelId: lineChannelId.trim(),
+          liffId: liffId.trim(),
+          companyName: companyName.trim(),
+          primaryColor,
+          updatedAt: Timestamp.now(),
+        });
+
+        console.log('✅ Settings saved via Firestore (public info only)');
+        setSuccess(true);
+        setTimeout(() => setSuccess(false), 3000);
+
+        // Don't clear secret fields if they weren't saved
+        if (!hasSecretUpdates) {
+          setLineChannelSecret('');
+          setLineAccessToken('');
+        }
       }
-
-      setSuccess(true);
-      setTimeout(() => setSuccess(false), 3000);
-
-      // Clear secret fields after successful save
-      setLineChannelSecret('');
-      setLineAccessToken('');
     } catch (error) {
       console.error('Error saving settings:', error);
       alert('設定の保存に失敗しました: ' + (error instanceof Error ? error.message : '不明なエラー'));
@@ -196,14 +340,48 @@ export default function SettingsPage() {
   }
 
   return (
-    <div className="space-y-6 max-w-3xl">
-      {/* Header */}
-      <div>
-        <h2 className="text-2xl font-bold text-gray-900">設定</h2>
-        <p className="text-sm text-gray-600 mt-1">
-          組織の設定とLINE連携を管理します
-        </p>
-      </div>
+    <div className="space-y-6 max-w-3xl relative">
+      {/* Warning Banner - shown above overlay (shown if user is authenticated and hasn't purchased support) */}
+      {!hasPurchasedSupport && userData?.organizationId && (
+        <div className="fixed top-16 left-0 lg:left-64 right-0 z-[60] bg-amber-50 border-b-2 border-amber-400 shadow-lg">
+          <div className="max-w-7xl mx-auto px-4 py-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-3">
+                <div className="flex-shrink-0">
+                  <svg className="h-6 w-6 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                  </svg>
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-amber-900">設定ページのご利用にはサポートサービスが必要です</h3>
+                  <p className="text-xs text-amber-800 mt-1">LINE連携の初期設定サポートと使い方レクチャーが含まれます</p>
+                </div>
+              </div>
+              <Link
+                href="/dashboard/subscription"
+                className="flex-shrink-0 bg-amber-600 hover:bg-amber-700 text-white px-6 py-2 rounded-lg font-medium transition-colors shadow-md"
+              >
+                サポートプランを見る
+              </Link>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Support Service Overlay */}
+      {!hasPurchasedSupport && userData?.organizationId && (
+        <SupportServiceOverlay organizationId={userData.organizationId} />
+      )}
+
+      {/* Main Content - blurred when overlay is shown */}
+      <div className={!hasPurchasedSupport ? 'filter blur-sm pointer-events-none select-none' : ''}>
+        {/* Header */}
+        <div>
+          <h2 className="text-2xl font-bold text-gray-900">設定</h2>
+          <p className="text-sm text-gray-600 mt-1">
+            組織の設定とLINE連携を管理します
+          </p>
+        </div>
 
       {success && (
         <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-md flex items-center">
@@ -632,6 +810,7 @@ export default function SettingsPage() {
           </Button>
         </div>
       </form>
+      </div>
     </div>
   );
 }
