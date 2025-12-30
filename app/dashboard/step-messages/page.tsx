@@ -16,7 +16,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { Plus, Edit, Trash2, Save, Mail, Clock, Users, Sparkles, CheckCircle } from 'lucide-react';
+import { Plus, Edit, Trash2, Save, Mail, Clock, Users, Sparkles, CheckCircle, AlertCircle } from 'lucide-react';
+import Link from 'next/link';
 
 interface StepMessageTemplate {
   id?: string;
@@ -31,8 +32,9 @@ interface StepMessageTemplate {
 }
 
 export default function StepMessagesPage() {
-  const { userData } = useAuth();
+  const { userData, user } = useAuth();
   const [loading, setLoading] = useState(true);
+  const [showLineSetupWarning, setShowLineSetupWarning] = useState(false);
   const [templates, setTemplates] = useState<StepMessageTemplate[]>([]);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingTemplate, setEditingTemplate] = useState<StepMessageTemplate | null>(null);
@@ -398,7 +400,7 @@ L-Applyへようこそ！
   ];
 
   const handleImportDefaults = async () => {
-    if (!userData?.organizationId) return;
+    if (!userData?.organizationId || !user) return;
     if (!confirm('デフォルトのステップメッセージをインポートしますか？\n既存のメッセージは削除されません。')) {
       return;
     }
@@ -423,7 +425,7 @@ L-Applyへようこそ！
   };
 
   const fetchTemplates = async () => {
-    if (!userData?.organizationId) return;
+    if (!userData?.organizationId || !user) return;
 
     try {
       const templatesQuery = query(
@@ -455,7 +457,51 @@ L-Applyへようこそ！
 
   useEffect(() => {
     fetchTemplates();
-  }, [userData]);
+  }, [userData, user]);
+
+  // Check LINE setup status
+  useEffect(() => {
+    if (!userData?.organizationId || !user) return;
+
+    const checkLineSetup = async () => {
+      try {
+        const orgDoc = await getDoc(doc(db, 'organizations', userData.organizationId));
+        if (!orgDoc.exists()) return;
+
+        const orgData = orgDoc.data();
+        const hasLineSetup = !!(orgData.lineChannelId && orgData.liffId);
+
+        // Initially set warning based on organization data
+        let shouldShowWarning = !hasLineSetup;
+
+        try {
+          const idToken = await user.getIdToken();
+          const response = await fetch('/api/settings', {
+            method: 'GET',
+            headers: {
+              'Authorization': `Bearer ${idToken}`,
+            },
+          });
+          if (response.ok) {
+            const data = await response.json();
+            const hasSecrets = data.secretsMetadata?.hasChannelSecret &&
+                               data.secretsMetadata?.hasChannelAccessToken;
+
+            shouldShowWarning = !hasLineSetup || !hasSecrets;
+          }
+        } catch (error) {
+          console.error('Error fetching settings:', error);
+        }
+
+        // Set the warning state
+        setShowLineSetupWarning(shouldShowWarning);
+      } catch (error) {
+        console.error('Error checking LINE setup:', error);
+      }
+    };
+
+    checkLineSetup();
+  }, [userData, user]);
 
   const handleOpenDialog = (template?: StepMessageTemplate, messageType?: 'after-seminar' | 'general' | 'welcome' | 'completion') => {
     if (template) {
@@ -494,7 +540,7 @@ L-Applyへようこそ！
   };
 
   const handleSave = async () => {
-    if (!userData?.organizationId) return;
+    if (!userData?.organizationId || !user) return;
 
     // ウェルカムメッセージの重複チェック
     if (formData.messageType === 'welcome' && !editingTemplate?.id) {
@@ -608,7 +654,36 @@ L-Applyへようこそ！
   const generalTemplates = templates.filter((t) => t.messageType === 'general');
 
   return (
-    <div className="space-y-6">
+    <div className="relative space-y-6">
+      {/* LINE Setup Blocking Overlay */}
+      {showLineSetupWarning && (
+        <div className="fixed inset-0 bg-white/60 backdrop-blur-sm z-20 flex items-center justify-center">
+          <Card className="max-w-md w-full mx-4 border-amber-300 bg-white shadow-2xl">
+            <CardContent className="p-8">
+              <div className="text-center">
+                <div className="mx-auto flex items-center justify-center h-16 w-16 rounded-full bg-amber-100 mb-4">
+                  <AlertCircle className="h-8 w-8 text-amber-600" />
+                </div>
+                <h3 className="text-xl font-bold text-gray-900 mb-3">
+                  LINE連携の設定が必要です
+                </h3>
+                <p className="text-sm text-gray-600 mb-6">
+                  ステップ配信機能を使用するには、設定画面でLINE Messaging APIの認証情報を設定する必要があります。
+                  <br /><br />
+                  設定が完了するまで、ステップ配信機能はご利用いただけません。
+                </p>
+                <Link
+                  href="/dashboard/settings"
+                  className="inline-flex items-center justify-center w-full px-6 py-3 border border-transparent text-base font-medium rounded-md text-white bg-amber-600 hover:bg-amber-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-amber-500 transition-colors"
+                >
+                  設定画面を開く
+                </Link>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
