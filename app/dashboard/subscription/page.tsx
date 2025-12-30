@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
-import { STRIPE_PLANS, formatPrice } from '@/lib/stripe-config';
+import { STRIPE_PLANS, STRIPE_ADDONS, formatPrice } from '@/lib/stripe-config';
 import Link from 'next/link';
 
 interface Organization {
@@ -24,6 +24,14 @@ interface Organization {
     stepDeliveriesCount: number;
     remindersCount: number;
     applicationsThisMonth: number;
+  };
+  addons?: {
+    [key: string]: {
+      purchased: boolean;
+      purchasedAt?: any;
+      stripePaymentIntentId?: string;
+      amountPaid?: number;
+    };
   };
 }
 
@@ -102,6 +110,43 @@ export default function SubscriptionPage() {
     }
   };
 
+  const handlePurchaseAddon = async (addonId: string) => {
+    if (!organization) {
+      alert('組織情報が見つかりません');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      setError(null);
+
+      const response = await fetch('/api/stripe/create-addon-checkout-session', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          organizationId: organization.id,
+          addonId,
+        }),
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || 'Failed to create checkout session');
+      }
+
+      const { url } = await response.json();
+
+      // Redirect to Stripe Checkout
+      window.location.href = url;
+    } catch (err) {
+      console.error('Purchase error:', err);
+      setError(err instanceof Error ? err.message : '決済の開始に失敗しました');
+      setLoading(false);
+    }
+  };
+
   const getPlanBadgeColor = (plan: string) => {
     switch (plan) {
       case 'test':
@@ -152,7 +197,7 @@ export default function SubscriptionPage() {
     <div className="max-w-6xl mx-auto space-y-8">
       {/* Current Plan */}
       <div className="bg-white rounded-lg shadow p-6">
-        <h1 className="text-2xl font-bold text-gray-900 mb-4">サブスクリプション管理</h1>
+        <h1 className="text-2xl font-bold text-gray-900 mb-4">サポートプラン</h1>
 
         <div className="bg-gray-50 rounded-lg p-6">
           <div className="flex items-center justify-between mb-4">
@@ -230,10 +275,9 @@ export default function SubscriptionPage() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           {Object.values(STRIPE_PLANS).map((plan) => {
             const isCurrentPlan = currentPlan === plan.id;
-            const canUpgrade =
-              (currentPlan === 'test') ||
-              (currentPlan === 'monitor' && ['regular', 'pro'].includes(plan.id)) ||
-              (currentPlan === 'regular' && plan.id === 'pro');
+            // フリープラン（test）からのみアップグレード可能
+            // すでに契約中のプランには再度アップグレードできない
+            const canUpgrade = currentPlan === 'test' && !isCurrentPlan;
 
             return (
               <div
@@ -298,6 +342,63 @@ export default function SubscriptionPage() {
                         ? '処理中...'
                         : 'このプランにアップグレード'
                       : 'アップグレード不可'}
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Add-ons Section */}
+      <div>
+        <h2 className="text-xl font-bold text-gray-900 mb-4">追加サービス</h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {Object.values(STRIPE_ADDONS).map((addon) => {
+            const isPurchased = organization?.addons?.[addon.id]?.purchased === true;
+
+            return (
+              <div
+                key={addon.id}
+                className={`bg-white rounded-lg shadow-lg overflow-hidden ${
+                  isPurchased ? 'ring-2 ring-green-500' : ''
+                }`}
+              >
+                <div className="p-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-xl font-bold text-gray-900">{addon.name}</h3>
+                    {isPurchased && (
+                      <span className="px-2 py-1 bg-green-100 text-green-800 text-xs font-medium rounded">
+                        購入済み
+                      </span>
+                    )}
+                  </div>
+
+                  <p className="text-sm text-gray-600 mb-6">{addon.description}</p>
+
+                  <div className="mb-6">
+                    <div className="text-3xl font-bold text-gray-900">
+                      {formatPrice(addon.price)}
+                      <span className="text-sm font-normal text-gray-500 ml-2">
+                        {addon.isOneTime ? '（一回限り）' : '/月'}
+                      </span>
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={() => handlePurchaseAddon(addon.id)}
+                    disabled={isPurchased || loading}
+                    className={`w-full py-3 px-4 rounded-lg font-medium transition-colors ${
+                      isPurchased
+                        ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                        : 'bg-blue-600 text-white hover:bg-blue-700'
+                    }`}
+                  >
+                    {isPurchased
+                      ? '購入済み'
+                      : loading
+                      ? '処理中...'
+                      : '購入する'}
                   </button>
                 </div>
               </div>
