@@ -45,17 +45,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       if (firebaseUser) {
         try {
-          // Fetch user data from Firestore
+          // Fetch user data from Firestore with retry logic
           const userDocRef = doc(db, 'users', firebaseUser.uid);
           console.log('📄 Fetching user doc for UID:', firebaseUser.uid);
-          const userDoc = await getDoc(userDocRef);
+
+          let userDoc = await getDoc(userDocRef);
+          let retryCount = 0;
+          const maxRetries = 3;
+
+          // If document doesn't exist, retry a few times (for new signups)
+          while (!userDoc.exists() && retryCount < maxRetries) {
+            retryCount++;
+            console.log(`⏳ User document not found, retrying (${retryCount}/${maxRetries})...`);
+            await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second
+            userDoc = await getDoc(userDocRef);
+          }
 
           if (userDoc.exists()) {
             const data = userDoc.data() as UserData;
             console.log('✅ User data fetched:', data);
             setUserData(data);
           } else {
-            console.warn('⚠️ User document does not exist in Firestore');
+            console.warn('⚠️ User document does not exist in Firestore after retries');
             setUserData(null);
           }
         } catch (error) {
