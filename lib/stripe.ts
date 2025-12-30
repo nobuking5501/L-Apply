@@ -9,9 +9,8 @@ if (!stripeSecretKey) {
   throw new Error('STRIPE_SECRET_KEY is not set in environment variables');
 }
 
-// Initialize Stripe with API version
+// Initialize Stripe (using default API version from SDK)
 console.log('[Stripe] Initializing Stripe with key:', stripeSecretKey.substring(0, 7) + '...');
 export const stripe = new Stripe(stripeSecretKey, {
-  apiVersion: '2024-12-18.acacia',
   typescript: true,
 });
