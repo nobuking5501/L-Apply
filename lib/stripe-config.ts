@@ -2,7 +2,7 @@
 // プランごとの価格設定とStripe Price ID
 
 export interface StripePlan {
-  id: 'monitor' | 'regular' | 'pro';
+  id: 'monitor';
   name: string;
   price: number;
   stripePriceId: string;
@@ -15,37 +15,30 @@ export interface StripePlan {
   };
 }
 
-// Stripe Price IDs (これらはStripeダッシュボードで作成後に更新してください)
+export interface StripeAddon {
+  id: 'support';
+  name: string;
+  price: number;
+  stripePriceId: string;
+  description: string;
+  isOneTime: boolean;
+}
+
+// Stripe Price IDs (これらはStripeダッシュボードで作成済み)
 // https://dashboard.stripe.com/test/products
 export const STRIPE_PLANS: Record<string, StripePlan> = {
   monitor: {
     id: 'monitor',
     name: 'モニタープラン',
-    price: 980,
-    stripePriceId: 'price_1ScS53Lx84xZL0YKFO15KkWI', // モニタープラン
-    features: [
-      'イベント管理: 最大10件',
-      'ステップ配信: 最大3件',
-      'リマインド: 最大5件',
-      '月間申込受付: 最大100件',
-    ],
-    limits: {
-      maxEvents: 10,
-      maxStepDeliveries: 3,
-      maxReminders: 5,
-      maxApplicationsPerMonth: 100,
-    },
-  },
-  regular: {
-    id: 'regular',
-    name: '正規プラン',
     price: 1980,
-    stripePriceId: 'price_1ScS56Lx84xZL0YK77mbec5Q', // 正規プラン
+    stripePriceId: 'price_1Sjr1nACE7iiZLQmcQjUuR7d', // モニタープラン
     features: [
       'イベント管理: 最大10件',
       'ステップ配信: 最大3件',
-      'リマインド: 最大10件',
+      'リマインダー: 最大10件',
       '月間申込受付: 最大300件',
+      'LINE連携機能',
+      '自動返信機能',
     ],
     limits: {
       maxEvents: 10,
@@ -54,32 +47,31 @@ export const STRIPE_PLANS: Record<string, StripePlan> = {
       maxApplicationsPerMonth: 300,
     },
   },
-  pro: {
-    id: 'pro',
-    name: 'プロプラン',
-    price: 4980,
-    stripePriceId: 'price_1ScS59Lx84xZL0YKwSLdHLKJ', // プロプラン
-    features: [
-      'イベント管理: 最大50件',
-      'ステップ配信: 最大10件',
-      'リマインド: 最大50件',
-      '月間申込受付: 最大1,000件',
-    ],
-    limits: {
-      maxEvents: 50,
-      maxStepDeliveries: 10,
-      maxReminders: 50,
-      maxApplicationsPerMonth: 1000,
-    },
+};
+
+// 追加サービス（オプション）
+export const STRIPE_ADDONS: Record<string, StripeAddon> = {
+  support: {
+    id: 'support',
+    name: 'サポートサービス',
+    price: 15000,
+    stripePriceId: 'price_1Sjr2CACE7iiZLQmHyCF6f3D', // サポートサービス
+    description: '初回設定サポート - LINE連携の設定、基本的な使い方のレクチャーなど',
+    isOneTime: true,
   },
 };
 
 // 利用可能なプランのリスト
-export const AVAILABLE_PLANS = ['monitor', 'regular', 'pro'] as const;
+export const AVAILABLE_PLANS = ['monitor'] as const;
 
 // プランIDからプラン情報を取得
 export function getPlanConfig(planId: string): StripePlan | null {
   return STRIPE_PLANS[planId] || null;
+}
+
+// アドオンIDからアドオン情報を取得
+export function getAddonConfig(addonId: string): StripeAddon | null {
+  return STRIPE_ADDONS[addonId] || null;
 }
 
 // 価格を日本円でフォーマット
