@@ -66,15 +66,18 @@ export default function SubscriptionSuccessPage() {
       const checkAuth = setInterval(() => {
         if (auth.currentUser) {
           clearInterval(checkAuth);
+          setAuthReady(true);
           setLoading(false);
         }
       }, 500);
 
-      // Fallback: show success after 5 seconds even if auth not ready
+      // Fallback: show success after 3 seconds even if auth not ready
+      // This ensures users can always proceed
       setTimeout(() => {
         clearInterval(checkAuth);
+        setAuthReady(true); // Force enable links after timeout
         setLoading(false);
-      }, 5000);
+      }, 3000);
     } catch (err) {
       console.error('Error completing subscription:', err);
       setError(err instanceof Error ? err.message : 'サブスクリプションの完了に失敗しました');
