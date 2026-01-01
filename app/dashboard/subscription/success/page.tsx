@@ -4,20 +4,76 @@ import { useEffect, useState } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 
+// Force dynamic rendering for useSearchParams
+export const dynamic = 'force-dynamic';
+
 export default function SubscriptionSuccessPage() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const sessionId = searchParams.get('session_id');
 
   useEffect(() => {
-    // Wait a moment to allow webhook to process
-    const timer = setTimeout(() => {
-      setLoading(false);
-    }, 3000);
+    if (sessionId) {
+      completeSubscription();
+    }
+  }, [sessionId]);
 
-    return () => clearTimeout(timer);
-  }, []);
+  const completeSubscription = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      // Get session data from API
+      const response = await fetch('/api/stripe/complete-subscription', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          sessionId,
+        }),
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || 'Failed to complete subscription');
+      }
+
+      const result = await response.json();
+      console.log('Subscription data received:', result);
+
+      // Update Firestore from client-side (has proper permissions)
+      const { doc, updateDoc, Timestamp } = await import('firebase/firestore');
+      const { db } = await import('@/lib/firebase');
+
+      const orgRef = doc(db, 'organizations', result.organizationId);
+      await updateDoc(orgRef, {
+        'subscription.plan': result.planId,
+        'subscription.status': 'active',
+        'subscription.limits': result.planConfig,
+        'subscription.stripeCustomerId': result.stripeCustomerId,
+        'subscription.stripeSubscriptionId': result.stripeSubscriptionId,
+        'subscription.currentPeriodStart': Timestamp.now(),
+        'subscription.currentPeriodEnd': Timestamp.fromDate(
+          new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
+        ),
+        updatedAt: Timestamp.now(),
+      });
+
+      console.log('Subscription activated for organization:', result.organizationId);
+
+      // Wait a moment before showing success message
+      setTimeout(() => {
+        setLoading(false);
+      }, 1000);
+    } catch (err) {
+      console.error('Error completing subscription:', err);
+      setError(err instanceof Error ? err.message : 'サブスクリプションの完了に失敗しました');
+      setLoading(false);
+    }
+  };
 
   if (!sessionId) {
     return (
@@ -29,8 +85,33 @@ export default function SubscriptionSuccessPage() {
             href="/dashboard/subscription"
             className="inline-block bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700"
           >
-            サブスクリプション管理に戻る
+            サポートプラン管理に戻る
           </Link>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="max-w-2xl mx-auto text-center py-12">
+        <div className="bg-red-50 border border-red-200 rounded-lg p-8">
+          <h1 className="text-2xl font-bold text-red-600 mb-4">エラーが発生しました</h1>
+          <p className="text-red-600 mb-6">{error}</p>
+          <div className="space-y-4">
+            <button
+              onClick={() => window.location.reload()}
+              className="block w-full bg-red-600 text-white px-6 py-3 rounded-lg hover:bg-red-700 font-medium"
+            >
+              再試行
+            </button>
+            <Link
+              href="/dashboard/subscription"
+              className="block bg-gray-100 text-gray-700 px-6 py-3 rounded-lg hover:bg-gray-200 font-medium"
+            >
+              サポートプラン管理に戻る
+            </Link>
+          </div>
         </div>
       </div>
     );
@@ -75,7 +156,7 @@ export default function SubscriptionSuccessPage() {
           お支払いが完了しました！
         </h1>
         <p className="text-lg text-gray-600 mb-8">
-          サブスクリプションが正常にアップグレードされました。
+          サポートプランが正常にアップグレードされました。
           <br />
           新しいプランの機能をお楽しみください。
         </p>
@@ -91,7 +172,7 @@ export default function SubscriptionSuccessPage() {
             href="/dashboard/subscription"
             className="block bg-gray-100 text-gray-700 px-6 py-3 rounded-lg hover:bg-gray-200 font-medium"
           >
-            サブスクリプション管理を表示
+            サポートプラン管理を表示
           </Link>
         </div>
 
