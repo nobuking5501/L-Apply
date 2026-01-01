@@ -83,6 +83,10 @@ export default function SubscriptionPage() {
       setLoading(true);
       setError(null);
 
+      console.log('[Subscription] 🎯 Creating checkout session...');
+      console.log('[Subscription] 🎯 Organization ID:', organization.id);
+      console.log('[Subscription] 🎯 Plan ID:', planId);
+
       const response = await fetch('/api/stripe/create-checkout-session', {
         method: 'POST',
         headers: {
@@ -91,8 +95,11 @@ export default function SubscriptionPage() {
         body: JSON.stringify({
           organizationId: organization.id,
           planId,
+          usePopup: true, // ポップアップモードを指定
         }),
       });
+
+      console.log('[Subscription] 🎯 Checkout API response status:', response.status);
 
       if (!response.ok) {
         const data = await response.json();
@@ -100,11 +107,44 @@ export default function SubscriptionPage() {
       }
 
       const { url } = await response.json();
+      console.log('[Subscription] Checkout URL received, opening popup...');
 
-      // Redirect to Stripe Checkout
-      window.location.href = url;
+      // ポップアップで決済ページを開く（ポップアップブロック対策：ユーザーアクションから直接呼び出し）
+      const popupWidth = 800;
+      const popupHeight = 900;
+      const left = (window.screen.width - popupWidth) / 2;
+      const top = (window.screen.height - popupHeight) / 2;
+
+      const popup = window.open(
+        url,
+        'stripe_checkout',
+        `width=${popupWidth},height=${popupHeight},left=${left},top=${top},scrollbars=yes,resizable=yes`
+      );
+
+      if (!popup) {
+        // ポップアップがブロックされた場合は通常のリダイレクト
+        console.warn('[Subscription] Popup blocked, falling back to redirect');
+        window.location.href = url;
+        return;
+      }
+
+      console.log('[Subscription] Popup opened successfully');
+      setLoading(false);
+
+      // ポップアップが閉じられたら、決済完了を確認
+      const checkPopupClosed = setInterval(() => {
+        if (popup.closed) {
+          clearInterval(checkPopupClosed);
+          console.log('[Subscription] Popup closed, reloading page to check subscription status...');
+          // ポップアップが閉じられたら、サブスクリプションページをリロードして状態を確認
+          setTimeout(() => {
+            console.log('[Subscription] Reloading subscription page');
+            window.location.reload();
+          }, 1000); // 1秒待機してWebhookの処理を確保
+        }
+      }, 500);
     } catch (err) {
-      console.error('Upgrade error:', err);
+      console.error('[Subscription] Upgrade error:', err);
       setError(err instanceof Error ? err.message : '決済の開始に失敗しました');
       setLoading(false);
     }
