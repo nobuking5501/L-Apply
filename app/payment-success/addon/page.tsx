@@ -3,8 +3,6 @@
 import { useEffect, useState } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { onAuthStateChanged } from 'firebase/auth';
-import { auth } from '@/lib/firebase';
 
 // Force dynamic rendering for useSearchParams
 export const dynamic = 'force-dynamic';
@@ -14,22 +12,8 @@ export default function AddonSuccessPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [authReady, setAuthReady] = useState(false);
+  const [countdown, setCountdown] = useState(5);
   const sessionId = searchParams.get('session_id');
-
-  // Monitor authentication state
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      if (user) {
-        console.log('✅ User authenticated:', user.uid);
-        setAuthReady(true);
-      } else {
-        console.log('⚠️ User not authenticated yet');
-      }
-    });
-
-    return () => unsubscribe();
-  }, []);
 
   useEffect(() => {
     if (sessionId) {
@@ -37,20 +21,32 @@ export default function AddonSuccessPage() {
     }
   }, [sessionId]);
 
-  // Auto-redirect to settings page when auth is ready
+  // Start countdown and redirect when purchase is complete
   useEffect(() => {
-    if (authReady && !loading) {
-      // Wait a bit to ensure auth is fully synced with protected routes
-      const redirectTimer = setTimeout(() => {
-        if (auth.currentUser) {
-          console.log('🔄 Auto-redirecting to settings page...');
-          router.push('/dashboard/settings');
-        }
-      }, 1500);
+    if (!loading && !error) {
+      // Start countdown
+      const countdownInterval = setInterval(() => {
+        setCountdown((prev) => {
+          if (prev <= 1) {
+            clearInterval(countdownInterval);
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
 
-      return () => clearTimeout(redirectTimer);
+      // Redirect after 5 seconds
+      const redirectTimer = setTimeout(() => {
+        console.log('🔄 Redirecting to settings page...');
+        router.push('/dashboard/settings');
+      }, 5000);
+
+      return () => {
+        clearInterval(countdownInterval);
+        clearTimeout(redirectTimer);
+      };
     }
-  }, [authReady, loading, router]);
+  }, [loading, error, router]);
 
   const completeAddonPurchase = async () => {
     try {
@@ -58,7 +54,6 @@ export default function AddonSuccessPage() {
       setError(null);
 
       // Call server-side API to complete purchase
-      // Server handles Firestore updates with Admin SDK (no auth required)
       const response = await fetch('/api/stripe/complete-addon-purchase', {
         method: 'POST',
         headers: {
@@ -75,26 +70,14 @@ export default function AddonSuccessPage() {
       }
 
       const result = await response.json();
-      console.log('Addon purchase completed:', result);
+      console.log('✅ Addon purchase completed:', result);
 
-      // Wait for authentication to be ready before showing success
-      const checkAuth = setInterval(() => {
-        if (auth.currentUser) {
-          clearInterval(checkAuth);
-          setAuthReady(true);
-          setLoading(false);
-        }
-      }, 500);
-
-      // Fallback: show success after 3 seconds even if auth not ready
-      // This ensures users can always proceed
+      // Wait a moment before showing success
       setTimeout(() => {
-        clearInterval(checkAuth);
-        setAuthReady(true); // Force enable links after timeout
         setLoading(false);
-      }, 3000);
+      }, 1000);
     } catch (err) {
-      console.error('Error completing addon purchase:', err);
+      console.error('❌ Error completing addon purchase:', err);
       setError(err instanceof Error ? err.message : 'アドオン購入の完了に失敗しました');
       setLoading(false);
     }
@@ -183,62 +166,23 @@ export default function AddonSuccessPage() {
         <p className="text-lg text-gray-600 mb-8">
           サポートサービスの購入が正常に完了しました。
           <br />
-          設定ページから各種設定を行うことができます。
+          設定ページに自動的に移動します。
         </p>
 
-        <div className="mb-6 bg-blue-50 border border-blue-200 rounded-lg p-4">
-          <div className="flex items-center justify-center">
-            {!authReady ? (
-              <>
-                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600 mr-3"></div>
-                <p className="text-sm text-blue-700">アカウント情報を確認しています...</p>
-              </>
-            ) : (
-              <>
-                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600 mr-3"></div>
-                <p className="text-sm text-blue-700">設定ページに自動的に移動します...</p>
-              </>
-            )}
+        <div className="mb-8 bg-blue-50 border border-blue-200 rounded-lg p-6">
+          <div className="flex flex-col items-center justify-center">
+            <div className="text-6xl font-bold text-blue-600 mb-2">{countdown}</div>
+            <p className="text-sm text-blue-700">秒後に設定ページに移動します</p>
           </div>
-        </div>
-
-        <div className="space-y-4">
-          {authReady ? (
-            <>
-              <Link
-                href="/dashboard/settings"
-                className="block bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 font-medium"
-              >
-                設定ページに進む
-              </Link>
-              <Link
-                href="/dashboard"
-                className="block bg-gray-100 text-gray-700 px-6 py-3 rounded-lg hover:bg-gray-200 font-medium"
-              >
-                ダッシュボードに戻る
-              </Link>
-            </>
-          ) : (
-            <>
-              <button
-                disabled
-                className="block w-full bg-gray-300 text-gray-500 px-6 py-3 rounded-lg font-medium cursor-not-allowed"
-              >
-                設定ページに進む
-              </button>
-              <button
-                disabled
-                className="block w-full bg-gray-200 text-gray-400 px-6 py-3 rounded-lg font-medium cursor-not-allowed"
-              >
-                ダッシュボードに戻る
-              </button>
-            </>
-          )}
         </div>
 
         <div className="mt-8 pt-8 border-t border-gray-200">
           <p className="text-sm text-gray-500">
-            ご不明な点がございましたら、サポートまでお問い合わせください。
+            自動的に移動しない場合は、
+            <Link href="/dashboard/settings" className="text-blue-600 hover:underline ml-1">
+              こちらをクリック
+            </Link>
+            してください。
           </p>
         </div>
       </div>
