@@ -387,7 +387,17 @@ export default function SettingsPage() {
         });
 
         if (!response.ok) {
-          throw new Error('API request failed');
+          // Get detailed error message from API
+          const errorData = await response.json().catch(() => ({ error: 'API request failed' }));
+
+          // If LIFF ID duplicate (409), show specific error
+          if (response.status === 409 && errorData.code === 'LIFF_ID_DUPLICATE') {
+            alert(`❌ エラー: ${errorData.error}\n\n別のLIFF IDを作成してください。`);
+            setSaving(false);
+            return; // Don't use Firestore fallback for LIFF ID issues
+          }
+
+          throw new Error(errorData.error || 'API request failed');
         }
 
         console.log('✅ Settings saved via API');
@@ -397,6 +407,9 @@ export default function SettingsPage() {
         // Clear secret fields after successful save
         setLineChannelSecret('');
         setLineAccessToken('');
+
+        // Refresh page to show updated secrets metadata
+        window.location.reload();
       } catch (apiError) {
         console.error('API save failed, using Firestore fallback:', apiError);
 
