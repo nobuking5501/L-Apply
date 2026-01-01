@@ -68,12 +68,19 @@ export async function POST(request: NextRequest) {
 
     // Update Firestore using Admin SDK (server-side, no auth required)
     try {
-      console.log('[Complete Addon] Getting Firebase Admin DB...');
-      const db = getAdminDb();
-      const orgRef = db.collection('organizations').doc(organizationId);
+      console.log('[Complete Addon] 📊 Getting Firebase Admin DB...');
+      console.log('[Complete Addon] 📊 Organization ID:', organizationId);
+      console.log('[Complete Addon] 📊 Addon ID:', addonId);
 
-      console.log('[Complete Addon] Fetching organization document...');
+      const db = getAdminDb();
+      console.log('[Complete Addon] ✅ Firebase Admin DB obtained');
+
+      const orgRef = db.collection('organizations').doc(organizationId);
+      console.log('[Complete Addon] 📄 Organization ref created');
+
+      console.log('[Complete Addon] 🔍 Fetching organization document...');
       const orgDoc = await orgRef.get();
+      console.log('[Complete Addon] 📄 Organization document fetched, exists:', orgDoc.exists);
 
       if (!orgDoc.exists) {
         console.error('[Complete Addon] Organization not found:', organizationId);
@@ -95,7 +102,7 @@ export async function POST(request: NextRequest) {
         source: 'client_api',
       };
 
-      console.log('[Complete Addon] Updating organization with addon data:', {
+      console.log('[Complete Addon] 💾 Updating organization with addon data:', {
         organizationId,
         addonId,
         addonData,
@@ -110,8 +117,10 @@ export async function POST(request: NextRequest) {
         updatedAt: FieldValue.serverTimestamp(),
       }, { merge: true });
 
-      console.log('[Complete Addon] ✅ Addon purchase completed for organization:', organizationId);
-      console.log('[Complete Addon] ✅ Addon name:', addonConfig.name);
+      console.log('[Complete Addon] ✅✅✅ Addon purchase completed for organization:', organizationId);
+      console.log('[Complete Addon] ✅✅✅ Addon ID:', addonId);
+      console.log('[Complete Addon] ✅✅✅ Addon name:', addonConfig.name);
+      console.log('[Complete Addon] ✅✅✅ Amount paid:', addonData.amountPaid);
 
       return NextResponse.json({
         success: true,

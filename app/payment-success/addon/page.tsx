@@ -3,8 +3,6 @@
 import { useEffect, useState } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { onAuthStateChanged } from 'firebase/auth';
-import { auth } from '@/lib/firebase';
 
 // Force dynamic rendering for useSearchParams
 export const dynamic = 'force-dynamic';
@@ -16,43 +14,16 @@ export default function AddonSuccessPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [countdown, setCountdown] = useState(isPopup ? 3 : 5); // ポップアップは3秒、通常は5秒
-  const [authReady, setAuthReady] = useState(false);
   const sessionId = searchParams.get('session_id');
 
-  // Wait for Firebase auth to initialize FIRST before doing anything
+  // Execute purchase completion immediately when sessionId is available
+  // NO AUTH REQUIRED - server handles everything via Stripe session metadata
   useEffect(() => {
-    console.log('🔐 [Payment Success] Waiting for Firebase auth to initialize...');
-
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      if (user) {
-        console.log('✅ [Payment Success] Auth ready, user:', user.uid);
-        setAuthReady(true);
-      } else {
-        console.log('⚠️ [Payment Success] No authenticated user detected');
-        // Still mark as ready so we can show proper error message
-        setAuthReady(true);
-      }
-    });
-
-    // Timeout: if auth doesn't initialize within 5 seconds, proceed anyway
-    const authTimeout = setTimeout(() => {
-      console.log('⏱️ [Payment Success] Auth initialization timeout - proceeding');
-      setAuthReady(true);
-    }, 5000);
-
-    return () => {
-      unsubscribe();
-      clearTimeout(authTimeout);
-    };
-  }, []);
-
-  // Execute purchase completion when both auth is ready and sessionId is available
-  useEffect(() => {
-    if (authReady && sessionId && loading) {
-      console.log('🚀 [Payment Success] Auth ready and sessionId available, starting purchase completion');
+    if (sessionId && loading) {
+      console.log('🚀 [Payment Success] SessionId available, starting purchase completion');
       completeAddonPurchase();
     }
-  }, [authReady, sessionId]);
+  }, [sessionId]);
 
   // Start countdown and redirect/close when purchase completion is done
   useEffect(() => {
@@ -118,69 +89,37 @@ export default function AddonSuccessPage() {
       console.log('🛒 [Payment Success] Starting addon purchase completion...');
       console.log('🛒 [Payment Success] Session ID:', sessionId);
 
-      // Step 1: Get current user
-      const currentUser = auth.currentUser;
-      if (!currentUser) {
-        console.error('❌ [Payment Success] No authenticated user found');
-        throw new Error('認証されていません。もう一度ログインしてください。');
-      }
-      console.log('✅ [Payment Success] User authenticated:', currentUser.uid);
-
-      // Step 2: Get user data to find organization ID
-      const { doc, getDoc, updateDoc, Timestamp } = await import('firebase/firestore');
-      const { db } = await import('@/lib/firebase');
-
-      console.log('🔍 [Payment Success] Fetching user document...');
-      const userRef = doc(db, 'users', currentUser.uid);
-      const userSnap = await getDoc(userRef);
-
-      if (!userSnap.exists()) {
-        console.error('❌ [Payment Success] User document not found');
-        throw new Error('ユーザー情報が見つかりません');
-      }
-
-      const userData = userSnap.data();
-      const organizationId = userData.organizationId;
-
-      if (!organizationId) {
-        console.error('❌ [Payment Success] No organization ID found');
-        throw new Error('組織IDが見つかりません');
-      }
-
-      console.log('✅ [Payment Success] Organization ID found:', organizationId);
-
-      // Step 3: Write directly to Firestore using Client SDK
-      console.log('💾 [Payment Success] Writing addon purchase data to Firestore...');
-
-      const orgRef = doc(db, 'organizations', organizationId);
-
-      // Get current organization data to preserve existing addons
-      const orgSnap = await getDoc(orgRef);
-      const existingAddons = orgSnap.exists() && orgSnap.data()?.addons ? orgSnap.data()!.addons : {};
-
-      // Write addon purchase data
-      await updateDoc(orgRef, {
-        'addons.support': {
-          purchased: true,
-          purchasedAt: Timestamp.now(),
-          stripeSessionId: sessionId,
-          amountPaid: 15000,
-          source: 'client_direct',
-          completedAt: Timestamp.now(),
+      // Call server-side API - NO AUTH REQUIRED
+      // Server will get organizationId from Stripe session metadata
+      console.log('📡 [Payment Success] Calling server API...');
+      const response = await fetch('/api/stripe/complete-addon-purchase', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
         },
-        updatedAt: Timestamp.now(),
+        body: JSON.stringify({
+          sessionId,
+        }),
       });
 
-      console.log('✅ [Payment Success] Addon purchase data written to Firestore successfully!');
-      console.log('✅ [Payment Success] Organization:', organizationId);
-      console.log('✅ [Payment Success] Addon: support');
-      console.log('✅ [Payment Success] Source: client_direct');
+      console.log('📡 [Payment Success] Server response status:', response.status);
 
-      // Small delay to ensure data propagates
+      if (!response.ok) {
+        const data = await response.json();
+        console.error('❌ [Payment Success] Server API failed:', data);
+        throw new Error(data.error || 'サーバーでの処理に失敗しました');
+      }
+
+      const result = await response.json();
+      console.log('✅ [Payment Success] Server API success:', result);
+      console.log('✅ [Payment Success] Organization ID:', result.organizationId);
+      console.log('✅ [Payment Success] Addon:', result.addonId);
+
+      // Wait a bit for Firestore write to propagate
       setTimeout(() => {
         console.log('✅ [Payment Success] Purchase completion finished, ready to close/redirect');
         setLoading(false);
-      }, 500);
+      }, 1000);
 
     } catch (err) {
       console.error('❌ [Payment Success] Error completing addon purchase:', err);
