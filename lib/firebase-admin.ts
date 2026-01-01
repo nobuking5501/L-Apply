@@ -17,37 +17,60 @@ export function ensureAdminInitialized(): App {
 
   // Initialize with service account or default credentials
   try {
-    console.log('🔧 Initializing Firebase Admin...');
-    console.log('Environment check:', {
+    console.log('🔧 [Firebase Admin] Initializing...');
+    console.log('[Firebase Admin] Environment check:', {
       hasServiceAccount: !!process.env.FIREBASE_SERVICE_ACCOUNT,
+      serviceAccountLength: process.env.FIREBASE_SERVICE_ACCOUNT?.length || 0,
       hasGoogleCreds: !!process.env.GOOGLE_APPLICATION_CREDENTIALS,
       nodeEnv: process.env.NODE_ENV,
+      platform: process.platform,
     });
 
     if (process.env.FIREBASE_SERVICE_ACCOUNT) {
-      console.log('✅ Using FIREBASE_SERVICE_ACCOUNT');
-      // Parse service account JSON from environment variable
-      const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
-      adminApp = initializeApp({
-        credential: cert(serviceAccount),
-      });
-      console.log('✅ Firebase Admin initialized successfully with service account');
+      console.log('[Firebase Admin] ✅ FIREBASE_SERVICE_ACCOUNT found');
+      try {
+        // Parse service account JSON from environment variable
+        console.log('[Firebase Admin] Parsing service account JSON...');
+        const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+        console.log('[Firebase Admin] Service account parsed successfully:', {
+          projectId: serviceAccount.project_id,
+          clientEmail: serviceAccount.client_email,
+          hasPrivateKey: !!serviceAccount.private_key,
+          privateKeyLength: serviceAccount.private_key?.length || 0,
+        });
+
+        console.log('[Firebase Admin] Initializing with service account...');
+        adminApp = initializeApp({
+          credential: cert(serviceAccount),
+        });
+        console.log('[Firebase Admin] ✅ Initialized successfully with service account');
+      } catch (parseError) {
+        console.error('[Firebase Admin] ❌ Failed to parse service account JSON:', parseError);
+        if (parseError instanceof Error) {
+          console.error('[Firebase Admin] Parse error message:', parseError.message);
+          console.error('[Firebase Admin] Parse error stack:', parseError.stack);
+        }
+        throw new Error('Failed to parse FIREBASE_SERVICE_ACCOUNT: ' + (parseError instanceof Error ? parseError.message : String(parseError)));
+      }
     } else if (process.env.GOOGLE_APPLICATION_CREDENTIALS) {
-      console.log('⚠️ Using GOOGLE_APPLICATION_CREDENTIALS (not recommended for Vercel)');
+      console.log('[Firebase Admin] ⚠️ Using GOOGLE_APPLICATION_CREDENTIALS (not recommended for Vercel)');
       // Use credentials file path
       adminApp = initializeApp({
         credential: cert(process.env.GOOGLE_APPLICATION_CREDENTIALS),
       });
+      console.log('[Firebase Admin] ✅ Initialized with GOOGLE_APPLICATION_CREDENTIALS');
     } else {
-      console.error('❌ NO CREDENTIALS FOUND - This will fail on Vercel!');
-      console.error('❌ Please set FIREBASE_SERVICE_ACCOUNT environment variable in Vercel Dashboard');
-      throw new Error('FIREBASE_SERVICE_ACCOUNT environment variable is required');
+      console.error('[Firebase Admin] ❌ NO CREDENTIALS FOUND!');
+      console.error('[Firebase Admin] ❌ FIREBASE_SERVICE_ACCOUNT is required for Vercel deployment');
+      console.error('[Firebase Admin] ❌ Please set it in Vercel Dashboard -> Settings -> Environment Variables');
+      throw new Error('FIREBASE_SERVICE_ACCOUNT environment variable is required but not found');
     }
   } catch (error) {
-    console.error('❌ Failed to initialize Firebase Admin:', error);
+    console.error('[Firebase Admin] ❌ Failed to initialize:', error);
     if (error instanceof Error) {
-      console.error('Error message:', error.message);
-      console.error('Error stack:', error.stack);
+      console.error('[Firebase Admin] Error name:', error.name);
+      console.error('[Firebase Admin] Error message:', error.message);
+      console.error('[Firebase Admin] Error stack:', error.stack);
     }
     throw error;
   }
@@ -57,8 +80,10 @@ export function ensureAdminInitialized(): App {
 
 export function getAdminDb(): Firestore {
   if (!firestoreInstance) {
+    console.log('[Firebase Admin] Getting Firestore instance...');
     ensureAdminInitialized();
     firestoreInstance = getFirestore();
+    console.log('[Firebase Admin] ✅ Firestore instance obtained');
   }
   return firestoreInstance;
 }

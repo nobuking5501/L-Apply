@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { stripe } from '@/lib/stripe';
 import { headers } from 'next/headers';
 import Stripe from 'stripe';
-import { getPlanConfig } from '@/lib/stripe-config';
+import { getPlanConfig, STRIPE_ADDONS } from '@/lib/stripe-config';
 
 // Import Firebase client SDK instead of Admin SDK
 // This allows us to avoid Firebase Admin authentication issues
@@ -128,15 +128,24 @@ export async function POST(request: NextRequest) {
 async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
   const organizationId = session.metadata?.organizationId || session.client_reference_id;
   const planId = session.metadata?.planId;
+  const addonId = session.metadata?.addonId;
 
-  if (!organizationId || !planId) {
-    console.error('Missing organizationId or planId in session metadata');
+  console.log('[Webhook] Checkout completed:', {
+    organizationId,
+    planId,
+    addonId,
+    mode: session.mode,
+    paymentStatus: session.payment_status,
+  });
+
+  if (!organizationId) {
+    console.error('[Webhook] Missing organizationId in session metadata');
     return;
   }
 
-  const planConfig = getPlanConfig(planId);
-  if (!planConfig) {
-    console.error('Invalid planId:', planId);
+  // Verify payment was successful
+  if (session.payment_status !== 'paid') {
+    console.error('[Webhook] Payment not completed:', session.payment_status);
     return;
   }
 
@@ -145,27 +154,75 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
     const orgSnap = await getDoc(orgRef);
 
     if (!orgSnap.exists()) {
-      console.error('Organization not found:', organizationId);
+      console.error('[Webhook] Organization not found:', organizationId);
       return;
     }
 
-    // Update organization with new subscription info
-    await updateDoc(orgRef, {
-      'subscription.plan': planId,
-      'subscription.status': 'active',
-      'subscription.limits': planConfig.limits,
-      'subscription.stripeCustomerId': session.customer,
-      'subscription.stripeSubscriptionId': session.subscription,
-      'subscription.currentPeriodStart': Timestamp.now(),
-      'subscription.currentPeriodEnd': Timestamp.fromDate(
-        new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
-      ),
-      updatedAt: Timestamp.now(),
-    });
+    // Handle ADDON purchase (one-time payment)
+    if (addonId && session.mode === 'payment') {
+      console.log('[Webhook] Processing addon purchase:', addonId);
 
-    console.log('Subscription activated for organization:', organizationId);
+      const addonConfig = STRIPE_ADDONS[addonId];
+      if (!addonConfig) {
+        console.error('[Webhook] Invalid addonId:', addonId);
+        return;
+      }
+
+      // Get existing addons to preserve them
+      const orgData = orgSnap.data();
+      const existingAddons = orgData?.addons || {};
+
+      // Update organization with addon purchase
+      await updateDoc(orgRef, {
+        [`addons.${addonId}`]: {
+          purchased: true,
+          purchasedAt: Timestamp.now(),
+          stripePaymentIntentId: session.payment_intent,
+          amountPaid: session.amount_total ? session.amount_total / 100 : addonConfig.price,
+          source: 'webhook',
+        },
+        updatedAt: Timestamp.now(),
+      });
+
+      console.log('[Webhook] ✅ Addon purchase completed:', {
+        organizationId,
+        addonId,
+        addonName: addonConfig.name,
+      });
+      return;
+    }
+
+    // Handle SUBSCRIPTION purchase
+    if (planId && session.mode === 'subscription') {
+      console.log('[Webhook] Processing subscription purchase:', planId);
+
+      const planConfig = getPlanConfig(planId);
+      if (!planConfig) {
+        console.error('[Webhook] Invalid planId:', planId);
+        return;
+      }
+
+      // Update organization with new subscription info
+      await updateDoc(orgRef, {
+        'subscription.plan': planId,
+        'subscription.status': 'active',
+        'subscription.limits': planConfig.limits,
+        'subscription.stripeCustomerId': session.customer,
+        'subscription.stripeSubscriptionId': session.subscription,
+        'subscription.currentPeriodStart': Timestamp.now(),
+        'subscription.currentPeriodEnd': Timestamp.fromDate(
+          new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
+        ),
+        updatedAt: Timestamp.now(),
+      });
+
+      console.log('[Webhook] ✅ Subscription activated:', organizationId);
+      return;
+    }
+
+    console.error('[Webhook] Unknown checkout type - no planId or addonId found');
   } catch (error) {
-    console.error('Error updating organization:', error);
+    console.error('[Webhook] Error processing checkout:', error);
     throw error;
   }
 }
