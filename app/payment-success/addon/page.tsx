@@ -37,6 +37,21 @@ export default function AddonSuccessPage() {
     }
   }, [sessionId]);
 
+  // Auto-redirect to settings page when auth is ready
+  useEffect(() => {
+    if (authReady && !loading) {
+      // Wait a bit to ensure auth is fully synced with protected routes
+      const redirectTimer = setTimeout(() => {
+        if (auth.currentUser) {
+          console.log('🔄 Auto-redirecting to settings page...');
+          router.push('/dashboard/settings');
+        }
+      }, 1500);
+
+      return () => clearTimeout(redirectTimer);
+    }
+  }, [authReady, loading, router]);
+
   const completeAddonPurchase = async () => {
     try {
       setLoading(true);
@@ -171,14 +186,21 @@ export default function AddonSuccessPage() {
           設定ページから各種設定を行うことができます。
         </p>
 
-        {!authReady && (
-          <div className="mb-6 bg-blue-50 border border-blue-200 rounded-lg p-4">
-            <div className="flex items-center justify-center">
-              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600 mr-3"></div>
-              <p className="text-sm text-blue-700">アカウント情報を確認しています...</p>
-            </div>
+        <div className="mb-6 bg-blue-50 border border-blue-200 rounded-lg p-4">
+          <div className="flex items-center justify-center">
+            {!authReady ? (
+              <>
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600 mr-3"></div>
+                <p className="text-sm text-blue-700">アカウント情報を確認しています...</p>
+              </>
+            ) : (
+              <>
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600 mr-3"></div>
+                <p className="text-sm text-blue-700">設定ページに自動的に移動します...</p>
+              </>
+            )}
           </div>
-        )}
+        </div>
 
         <div className="space-y-4">
           {authReady ? (
