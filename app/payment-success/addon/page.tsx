@@ -113,39 +113,80 @@ export default function AddonSuccessPage() {
       setLoading(true);
       setError(null);
 
-      console.log('🛒 Starting addon purchase completion...');
+      console.log('🛒 [Payment Success] Starting addon purchase completion...');
+      console.log('🛒 [Payment Success] Session ID:', sessionId);
 
-      // Call server-side API to complete purchase
-      const response = await fetch('/api/stripe/complete-addon-purchase', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          sessionId,
-        }),
-      });
+      // Step 1: Get current user
+      const currentUser = auth.currentUser;
+      if (!currentUser) {
+        console.error('❌ [Payment Success] No authenticated user found');
+        throw new Error('認証されていません。もう一度ログインしてください。');
+      }
+      console.log('✅ [Payment Success] User authenticated:', currentUser.uid);
 
-      if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.error || 'Failed to complete addon purchase');
+      // Step 2: Get user data to find organization ID
+      const { doc, getDoc, updateDoc, Timestamp } = await import('firebase/firestore');
+      const { db } = await import('@/lib/firebase');
+
+      console.log('🔍 [Payment Success] Fetching user document...');
+      const userRef = doc(db, 'users', currentUser.uid);
+      const userSnap = await getDoc(userRef);
+
+      if (!userSnap.exists()) {
+        console.error('❌ [Payment Success] User document not found');
+        throw new Error('ユーザー情報が見つかりません');
       }
 
-      const result = await response.json();
-      console.log('✅ Addon purchase API call completed:', result);
+      const userData = userSnap.data();
+      const organizationId = userData.organizationId;
 
-      // IMPORTANT: We trust the server-side API to have written the data correctly
-      // Verification will be done on the settings page where the user is authenticated
-      // This avoids permission errors on this page where auth state may be unstable
-      console.log('✅ Purchase processing complete, will verify on settings page');
+      if (!organizationId) {
+        console.error('❌ [Payment Success] No organization ID found');
+        throw new Error('組織IDが見つかりません');
+      }
 
-      // Wait a bit longer to ensure Firestore write propagates
-      // This gives the server time to complete the write operation
+      console.log('✅ [Payment Success] Organization ID found:', organizationId);
+
+      // Step 3: Write directly to Firestore using Client SDK
+      console.log('💾 [Payment Success] Writing addon purchase data to Firestore...');
+
+      const orgRef = doc(db, 'organizations', organizationId);
+
+      // Get current organization data to preserve existing addons
+      const orgSnap = await getDoc(orgRef);
+      const existingAddons = orgSnap.exists() && orgSnap.data()?.addons ? orgSnap.data()!.addons : {};
+
+      // Write addon purchase data
+      await updateDoc(orgRef, {
+        'addons.support': {
+          purchased: true,
+          purchasedAt: Timestamp.now(),
+          stripeSessionId: sessionId,
+          amountPaid: 15000,
+          source: 'client_direct',
+          completedAt: Timestamp.now(),
+        },
+        updatedAt: Timestamp.now(),
+      });
+
+      console.log('✅ [Payment Success] Addon purchase data written to Firestore successfully!');
+      console.log('✅ [Payment Success] Organization:', organizationId);
+      console.log('✅ [Payment Success] Addon: support');
+      console.log('✅ [Payment Success] Source: client_direct');
+
+      // Small delay to ensure data propagates
       setTimeout(() => {
+        console.log('✅ [Payment Success] Purchase completion finished, ready to close/redirect');
         setLoading(false);
-      }, 2000); // 2 seconds wait
+      }, 500);
+
     } catch (err) {
-      console.error('❌ Error completing addon purchase:', err);
+      console.error('❌ [Payment Success] Error completing addon purchase:', err);
+      console.error('❌ [Payment Success] Error details:', {
+        message: err instanceof Error ? err.message : String(err),
+        sessionId,
+      });
+
       setError(err instanceof Error ? err.message : 'アドオン購入の完了に失敗しました');
       setLoading(false);
       setWaitingForAuth(false); // Skip auth wait on error
