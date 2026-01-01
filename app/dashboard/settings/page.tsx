@@ -12,6 +12,7 @@ import SupportServiceOverlay from '@/components/SupportServiceOverlay';
 import Link from 'next/link';
 import { useSearchParams, useRouter } from 'next/navigation';
 
+// Enhanced settings page with LINE API connection test and credential status display
 export default function SettingsPage() {
   const { user, userData } = useAuth(); // Get user from AuthContext
   const searchParams = useSearchParams();
