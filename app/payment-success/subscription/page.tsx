@@ -35,10 +35,10 @@ export default function SubscriptionSuccessPage() {
         });
       }, 1000);
 
-      // Redirect after 5 seconds
+      // Redirect after 5 seconds using window.location for full page reload
       const redirectTimer = setTimeout(() => {
         console.log('🔄 Redirecting to dashboard...');
-        router.push('/dashboard');
+        window.location.href = '/dashboard';
       }, 5000);
 
       return () => {
