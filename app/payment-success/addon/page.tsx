@@ -27,6 +27,7 @@ export default function AddonSuccessPage() {
 
   // Start countdown and redirect/close when purchase completion is done
   useEffect(() => {
+    // DON'T close popup if there's an error - user needs to see the error
     if (!loading && !error) {
       if (isPopup) {
         console.log('✅ [Popup Mode] Purchase complete, closing window in 3 seconds...');
@@ -156,6 +157,11 @@ export default function AddonSuccessPage() {
         <div className="bg-red-50 border border-red-200 rounded-lg p-8">
           <h1 className="text-2xl font-bold text-red-600 mb-4">エラーが発生しました</h1>
           <p className="text-red-600 mb-6">{error}</p>
+          <div className="mb-6 bg-white border border-gray-300 rounded-lg p-4 text-left">
+            <p className="text-sm text-gray-700 font-semibold mb-2">技術情報（サポートに連絡する際にお伝えください）:</p>
+            <p className="text-xs text-gray-600 font-mono break-all">Session ID: {sessionId}</p>
+            <p className="text-xs text-gray-600 font-mono mt-1">エラー: {error}</p>
+          </div>
           <div className="space-y-4">
             <button
               onClick={() => window.location.reload()}
@@ -163,12 +169,24 @@ export default function AddonSuccessPage() {
             >
               再試行
             </button>
-            <Link
-              href="/dashboard/settings"
-              className="block bg-gray-100 text-gray-700 px-6 py-3 rounded-lg hover:bg-gray-200 font-medium"
-            >
-              設定ページに戻る
-            </Link>
+            {isPopup ? (
+              <button
+                onClick={() => {
+                  window.opener.location.href = '/dashboard/settings';
+                  window.close();
+                }}
+                className="block w-full bg-gray-100 text-gray-700 px-6 py-3 rounded-lg hover:bg-gray-200 font-medium"
+              >
+                設定ページに戻る
+              </button>
+            ) : (
+              <Link
+                href="/dashboard/settings"
+                className="block bg-gray-100 text-gray-700 px-6 py-3 rounded-lg hover:bg-gray-200 font-medium"
+              >
+                設定ページに戻る
+              </Link>
+            )}
           </div>
         </div>
       </div>
