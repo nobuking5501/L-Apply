@@ -74,10 +74,16 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    console.log('[Settings GET] 🔍 User authenticated:', userData.uid);
+    console.log('[Settings GET] 🔍 Organization ID:', userData.organizationId);
+
     const db = getAdminDb();
     const orgDoc = await db.collection('organizations').doc(userData.organizationId).get();
 
+    console.log('[Settings GET] 🔍 Organization document exists:', orgDoc.exists);
+
     if (!orgDoc.exists) {
+      console.error('[Settings GET] ❌ Organization not found:', userData.organizationId);
       return NextResponse.json(
         { error: 'Organization not found' },
         { status: 404 }
@@ -85,6 +91,10 @@ export async function GET(request: NextRequest) {
     }
 
     const orgData = orgDoc.data();
+    console.log('[Settings GET] 🔍 Raw orgData keys:', Object.keys(orgData || {}));
+    console.log('[Settings GET] 🔍 orgData.addons:', orgData?.addons);
+    console.log('[Settings GET] 🔍 orgData.addons type:', typeof orgData?.addons);
+    console.log('[Settings GET] 🔍 Full orgData (stringified):', JSON.stringify(orgData, null, 2));
 
     // Fetch secrets metadata (NOT the actual secrets, just metadata)
     let secretsMetadata = {
@@ -121,7 +131,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Return public organization info (excluding actual secrets)
-    return NextResponse.json({
+    const responseData = {
       success: true,
       organization: {
         id: orgDoc.id,
@@ -131,9 +141,15 @@ export async function GET(request: NextRequest) {
         liffId: orgData?.liffId,
         lineChannelId: orgData?.lineChannelId,
         plan: orgData?.plan,
+        addons: orgData?.addons || {}, // Add addons field
       },
       secretsMetadata, // Add secrets metadata (masked, not actual secrets)
-    });
+    };
+
+    console.log('[Settings GET] 📤 Response addons field:', responseData.organization.addons);
+    console.log('[Settings GET] 📤 Response addons stringified:', JSON.stringify(responseData.organization.addons));
+
+    return NextResponse.json(responseData);
   } catch (error) {
     console.error('Error fetching settings:', error);
     return NextResponse.json(
@@ -178,6 +194,35 @@ export async function POST(request: NextRequest) {
     } = body;
 
     const db = getAdminDb();
+
+    // Check for liffId uniqueness if liffId is being updated
+    if (liffId !== undefined) {
+      const trimmedLiffId = String(liffId).trim();
+
+      if (trimmedLiffId) {
+        // Check if another organization is using this liffId
+        const existingOrgsSnapshot = await db
+          .collection('organizations')
+          .where('liffId', '==', trimmedLiffId)
+          .limit(2) // Get up to 2 to check for duplicates
+          .get();
+
+        // Filter out the current organization
+        const otherOrgs = existingOrgsSnapshot.docs.filter(
+          (doc) => doc.id !== userData.organizationId
+        );
+
+        if (otherOrgs.length > 0) {
+          return NextResponse.json(
+            {
+              error: 'このLIFF IDは既に他の組織で使用されています。別のLIFF IDを指定してください。',
+              code: 'LIFF_ID_DUPLICATE'
+            },
+            { status: 409 }
+          );
+        }
+      }
+    }
 
     // Update public organization info
     const orgRef = db.collection('organizations').doc(userData.organizationId);
