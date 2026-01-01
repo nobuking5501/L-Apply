@@ -35,7 +35,7 @@ export async function POST(request: NextRequest) {
           quantity: 1,
         },
       ],
-      success_url: `${baseUrl}/dashboard/subscription/success?session_id={CHECKOUT_SESSION_ID}`,
+      success_url: `${baseUrl}/stripe-success/subscription?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${baseUrl}/dashboard/subscription?canceled=true`,
       metadata: {
         organizationId,
