@@ -111,10 +111,16 @@ export default function SettingsPage() {
   };
 
   useEffect(() => {
-    if (!userData?.organizationId || !user) return;
+    console.log('[Settings] useEffect triggered, userData:', userData?.organizationId, 'user:', !!user);
+
+    if (!userData?.organizationId || !user) {
+      console.log('[Settings] Early return - missing userData or user');
+      return;
+    }
 
     const fetchOrganization = async () => {
       try {
+        console.log('[Settings] 📡 Fetching from API...');
         // Try to fetch from API first to get both organization data and secrets metadata
         const idToken = await user.getIdToken();
         const response = await fetch('/api/settings', {
@@ -124,11 +130,14 @@ export default function SettingsPage() {
           },
         });
 
+        console.log('[Settings] API response status:', response.status);
+
         if (!response.ok) {
           throw new Error('Failed to fetch settings from API');
         }
 
         const data = await response.json();
+        console.log('[Settings] API response data:', data);
 
         if (data.success && data.organization) {
           const orgData = data.organization;
@@ -144,15 +153,24 @@ export default function SettingsPage() {
           setPrimaryColor(orgData.primaryColor || '#3B82F6');
 
           // Set secrets metadata (for display purposes)
-          if (data.secretsMetadata) {
-            setSecretsMetadata(data.secretsMetadata);
-          }
+          // ALWAYS set secretsMetadata, even if it's empty
+          setSecretsMetadata(data.secretsMetadata || {
+            hasChannelSecret: false,
+            hasChannelAccessToken: false,
+            channelSecretMasked: '',
+            channelAccessTokenMasked: '',
+            channelSecretLength: 0,
+            channelAccessTokenLength: 0,
+            secretsUpdatedAt: null,
+          });
+
+          console.log('[Settings] ✅ Secrets metadata set:', data.secretsMetadata);
 
           // Check if support addon is purchased
           setHasPurchasedSupport(orgData.addons?.support?.purchased === true);
         }
       } catch (error) {
-        console.error('Error fetching organization from API, falling back to Firestore:', error);
+        console.error('[Settings] ❌ Error fetching organization from API, falling back to Firestore:', error);
 
         // Fallback: Fetch directly from Firestore using client SDK
         try {
@@ -189,11 +207,12 @@ export default function SettingsPage() {
             // Check if support addon is purchased (from Firestore)
             setHasPurchasedSupport(orgData.addons?.support?.purchased === true);
 
-            console.log('✅ Fallback: Organization data fetched from Firestore, hasPurchasedSupport:', orgData.addons?.support?.purchased === true);
+            console.log('[Settings] ✅ Fallback: Organization data fetched from Firestore, hasPurchasedSupport:', orgData.addons?.support?.purchased === true);
 
             // Fetch secrets metadata from organization_secrets collection
             // Note: This will fail with permission error (by design), which is handled below
             try {
+              console.log('[Settings] 🔒 Attempting to fetch secrets from Firestore...');
               const secretsRef = doc(db, 'organization_secrets', userData.organizationId);
               const secretsSnap = await getDoc(secretsRef);
 
@@ -221,9 +240,10 @@ export default function SettingsPage() {
                   secretsUpdatedAt: secretsData?.updatedAt || null,
                 });
 
-                console.log('✅ Fallback: Secrets metadata fetched from Firestore');
+                console.log('[Settings] ✅ Fallback: Secrets metadata fetched from Firestore');
               } else {
                 // No secrets document, set empty metadata
+                console.log('[Settings] ℹ️ Fallback: No secrets document found (not yet configured)');
                 setSecretsMetadata({
                   hasChannelSecret: false,
                   hasChannelAccessToken: false,
@@ -233,17 +253,16 @@ export default function SettingsPage() {
                   channelAccessTokenLength: 0,
                   secretsUpdatedAt: null,
                 });
-                console.log('ℹ️ Fallback: No secrets document found (not yet configured)');
               }
             } catch (secretsError: any) {
               // Permission error is expected - organization_secrets is server-side only
               if (secretsError?.code === 'permission-denied') {
-                console.log('ℹ️ Secrets metadata not accessible from client (server-side only for security)');
+                console.log('[Settings] ℹ️ Secrets metadata not accessible from client (permission-denied - this is expected)');
               } else {
-                console.warn('Could not fetch secrets metadata:', secretsError?.message || secretsError);
+                console.warn('[Settings] ⚠️ Could not fetch secrets metadata:', secretsError?.message || secretsError);
               }
 
-              // Set empty metadata (secrets will show as "not configured")
+              // ALWAYS set empty metadata (secrets will show as "❌ 未設定")
               setSecretsMetadata({
                 hasChannelSecret: false,
                 hasChannelAccessToken: false,
@@ -253,6 +272,7 @@ export default function SettingsPage() {
                 channelAccessTokenLength: 0,
                 secretsUpdatedAt: null,
               });
+              console.log('[Settings] ✅ Set default empty secretsMetadata');
             }
           }
         } catch (firestoreError) {
@@ -580,15 +600,13 @@ export default function SettingsPage() {
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <Label htmlFor="lineChannelSecret">LINE Channel Secret</Label>
-                {secretsMetadata && (
-                  <div className="text-xs text-gray-500">
-                    {secretsMetadata.hasChannelSecret ? (
-                      <span className="text-green-600 font-medium">✅ 設定済み ({secretsMetadata.channelSecretLength}文字)</span>
-                    ) : (
-                      <span className="text-amber-600 font-medium">❌ 未設定</span>
-                    )}
-                  </div>
-                )}
+                <div className="text-xs text-gray-500">
+                  {secretsMetadata?.hasChannelSecret ? (
+                    <span className="text-green-600 font-medium">✅ 設定済み ({secretsMetadata.channelSecretLength}文字)</span>
+                  ) : (
+                    <span className="text-amber-600 font-medium">❌ 未設定</span>
+                  )}
+                </div>
               </div>
               {secretsMetadata?.hasChannelSecret && secretsMetadata.channelSecretMasked && (
                 <div className="bg-gray-50 px-3 py-2 rounded-md border border-gray-200">
@@ -640,15 +658,13 @@ export default function SettingsPage() {
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <Label htmlFor="lineAccessToken">LINE Channel Access Token</Label>
-                {secretsMetadata && (
-                  <div className="text-xs text-gray-500">
-                    {secretsMetadata.hasChannelAccessToken ? (
-                      <span className="text-green-600 font-medium">✅ 設定済み ({secretsMetadata.channelAccessTokenLength}文字)</span>
-                    ) : (
-                      <span className="text-amber-600 font-medium">❌ 未設定</span>
-                    )}
-                  </div>
-                )}
+                <div className="text-xs text-gray-500">
+                  {secretsMetadata?.hasChannelAccessToken ? (
+                    <span className="text-green-600 font-medium">✅ 設定済み ({secretsMetadata.channelAccessTokenLength}文字)</span>
+                  ) : (
+                    <span className="text-amber-600 font-medium">❌ 未設定</span>
+                  )}
+                </div>
               </div>
               {secretsMetadata?.hasChannelAccessToken && secretsMetadata.channelAccessTokenMasked && (
                 <div className="bg-gray-50 px-3 py-2 rounded-md border border-gray-200">
