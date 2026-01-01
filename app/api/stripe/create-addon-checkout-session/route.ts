@@ -5,9 +5,9 @@ import { STRIPE_ADDONS } from '@/lib/stripe-config';
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { organizationId, addonId } = body;
+    const { organizationId, addonId, usePopup } = body;
 
-    console.log('[Addon Checkout] Request:', { organizationId, addonId });
+    console.log('[Addon Checkout] Request:', { organizationId, addonId, usePopup });
 
     if (!organizationId || !addonId) {
       return NextResponse.json(
@@ -50,6 +50,14 @@ export async function POST(request: NextRequest) {
 
     // Create Stripe Checkout Session for one-time payment
     console.log('[Addon Checkout] Creating Stripe session...');
+
+    // ポップアップモードの場合は success_url にパラメータを追加
+    const successUrl = usePopup
+      ? `${baseUrl}/payment-success/addon?session_id={CHECKOUT_SESSION_ID}&popup=true`
+      : `${baseUrl}/payment-success/addon?session_id={CHECKOUT_SESSION_ID}`;
+
+    console.log('[Addon Checkout] Success URL:', successUrl);
+
     const session = await stripe.checkout.sessions.create({
       mode: 'payment', // One-time payment mode
       payment_method_types: ['card'],
@@ -59,7 +67,7 @@ export async function POST(request: NextRequest) {
           quantity: 1,
         },
       ],
-      success_url: `${baseUrl}/payment-success/addon?session_id={CHECKOUT_SESSION_ID}`,
+      success_url: successUrl,
       cancel_url: `${baseUrl}/dashboard/settings?addon_canceled=true`,
       metadata: {
         organizationId,

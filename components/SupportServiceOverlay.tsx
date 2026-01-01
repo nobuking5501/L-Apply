@@ -25,6 +25,8 @@ export default function SupportServiceOverlay({
       setLoading(true);
       setError(null);
 
+      console.log('[Support Overlay] Creating checkout session...');
+
       const response = await fetch('/api/stripe/create-addon-checkout-session', {
         method: 'POST',
         headers: {
@@ -33,6 +35,7 @@ export default function SupportServiceOverlay({
         body: JSON.stringify({
           organizationId,
           addonId: 'support',
+          usePopup: true, // ポップアップモードを指定
         }),
       });
 
@@ -42,11 +45,43 @@ export default function SupportServiceOverlay({
       }
 
       const { url } = await response.json();
+      console.log('[Support Overlay] Checkout URL received, opening popup...');
 
-      // Redirect to Stripe Checkout
-      window.location.href = url;
+      // ポップアップで決済ページを開く（ポップアップブロック対策：ユーザーアクションから直接呼び出し）
+      const popupWidth = 800;
+      const popupHeight = 900;
+      const left = (window.screen.width - popupWidth) / 2;
+      const top = (window.screen.height - popupHeight) / 2;
+
+      const popup = window.open(
+        url,
+        'stripe_checkout',
+        `width=${popupWidth},height=${popupHeight},left=${left},top=${top},scrollbars=yes,resizable=yes`
+      );
+
+      if (!popup) {
+        // ポップアップがブロックされた場合は通常のリダイレクト
+        console.warn('[Support Overlay] Popup blocked, falling back to redirect');
+        window.location.href = url;
+        return;
+      }
+
+      console.log('[Support Overlay] Popup opened successfully');
+      setLoading(false);
+
+      // ポップアップが閉じられたら、決済完了を確認
+      const checkPopupClosed = setInterval(() => {
+        if (popup.closed) {
+          clearInterval(checkPopupClosed);
+          console.log('[Support Overlay] Popup closed, will refresh page to check purchase status');
+          // 少し待ってからリフレッシュ（Webhookの処理を待つ）
+          setTimeout(() => {
+            window.location.reload();
+          }, 2000);
+        }
+      }, 500);
     } catch (err) {
-      console.error('Purchase error:', err);
+      console.error('[Support Overlay] Purchase error:', err);
       setError(err instanceof Error ? err.message : '決済の開始に失敗しました');
       setLoading(false);
     }

@@ -12,9 +12,10 @@ export const dynamic = 'force-dynamic';
 export default function AddonSuccessPage() {
   const searchParams = useSearchParams();
   const router = useRouter();
+  const isPopup = searchParams.get('popup') === 'true';
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [countdown, setCountdown] = useState(5);
+  const [countdown, setCountdown] = useState(isPopup ? 3 : 5); // ポップアップは3秒、通常は5秒
   const [waitingForAuth, setWaitingForAuth] = useState(true);
   const sessionId = searchParams.get('session_id');
 
@@ -51,35 +52,61 @@ export default function AddonSuccessPage() {
     };
   }, [loading]);
 
-  // Start countdown and redirect when auth is ready
+  // Start countdown and redirect/close when auth is ready
   useEffect(() => {
     if (!loading && !error && !waitingForAuth) {
-      console.log('🚀 Starting countdown for redirect...');
+      if (isPopup) {
+        console.log('✅ [Popup Mode] Purchase complete, closing window in 3 seconds...');
 
-      // Start countdown
-      const countdownInterval = setInterval(() => {
-        setCountdown((prev) => {
-          if (prev <= 1) {
-            clearInterval(countdownInterval);
-            return 0;
-          }
-          return prev - 1;
-        });
-      }, 1000);
+        // ポップアップモードの場合は、短いカウントダウン後にウィンドウを閉じる
+        const countdownInterval = setInterval(() => {
+          setCountdown((prev) => {
+            if (prev <= 1) {
+              clearInterval(countdownInterval);
+              return 0;
+            }
+            return prev - 1;
+          });
+        }, 1000);
 
-      // Redirect after 5 seconds using window.location for full page reload
-      // Add query parameter to signal successful purchase
-      const redirectTimer = setTimeout(() => {
-        console.log('🔄 Redirecting to settings page with addon_purchased flag...');
-        window.location.href = '/dashboard/settings?addon_purchased=true';
-      }, 5000);
+        // 3秒後にウィンドウを閉じる
+        const closeTimer = setTimeout(() => {
+          console.log('✅ [Popup Mode] Closing window...');
+          window.close();
+        }, 3000);
 
-      return () => {
-        clearInterval(countdownInterval);
-        clearTimeout(redirectTimer);
-      };
+        return () => {
+          clearInterval(countdownInterval);
+          clearTimeout(closeTimer);
+        };
+      } else {
+        console.log('🚀 Starting countdown for redirect...');
+
+        // 通常モード: リダイレクト
+        const countdownInterval = setInterval(() => {
+          setCountdown((prev) => {
+            if (prev <= 1) {
+              clearInterval(countdownInterval);
+              return 0;
+            }
+            return prev - 1;
+          });
+        }, 1000);
+
+        // Redirect after 5 seconds using window.location for full page reload
+        // Add query parameter to signal successful purchase
+        const redirectTimer = setTimeout(() => {
+          console.log('🔄 Redirecting to settings page with addon_purchased flag...');
+          window.location.href = '/dashboard/settings?addon_purchased=true';
+        }, 5000);
+
+        return () => {
+          clearInterval(countdownInterval);
+          clearTimeout(redirectTimer);
+        };
+      }
     }
-  }, [loading, error, waitingForAuth, router]);
+  }, [loading, error, waitingForAuth, isPopup, router]);
 
   const completeAddonPurchase = async () => {
     try {
@@ -210,25 +237,29 @@ export default function AddonSuccessPage() {
         <p className="text-lg text-gray-600 mb-8">
           サポートサービスの購入が正常に完了しました。
           <br />
-          設定ページに自動的に移動します。
+          {isPopup ? 'このウィンドウは自動的に閉じます。' : '設定ページに自動的に移動します。'}
         </p>
 
         <div className="mb-8 bg-blue-50 border border-blue-200 rounded-lg p-6">
           <div className="flex flex-col items-center justify-center">
             <div className="text-6xl font-bold text-blue-600 mb-2">{countdown}</div>
-            <p className="text-sm text-blue-700">秒後に設定ページに移動します</p>
+            <p className="text-sm text-blue-700">
+              {isPopup ? '秒後にウィンドウを閉じます' : '秒後に設定ページに移動します'}
+            </p>
           </div>
         </div>
 
-        <div className="mt-8 pt-8 border-t border-gray-200">
-          <p className="text-sm text-gray-500">
-            自動的に移動しない場合は、
-            <Link href="/dashboard/settings" className="text-blue-600 hover:underline ml-1">
-              こちらをクリック
-            </Link>
-            してください。
-          </p>
-        </div>
+        {!isPopup && (
+          <div className="mt-8 pt-8 border-t border-gray-200">
+            <p className="text-sm text-gray-500">
+              自動的に移動しない場合は、
+              <Link href="/dashboard/settings" className="text-blue-600 hover:underline ml-1">
+                こちらをクリック
+              </Link>
+              してください。
+            </p>
+          </div>
+        )}
       </div>
     </div>
   );
