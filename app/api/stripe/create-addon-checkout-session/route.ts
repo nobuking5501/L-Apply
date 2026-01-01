@@ -59,7 +59,7 @@ export async function POST(request: NextRequest) {
           quantity: 1,
         },
       ],
-      success_url: `${baseUrl}/dashboard/subscription/addon-success?session_id={CHECKOUT_SESSION_ID}`,
+      success_url: `${baseUrl}/payment-success/addon?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${baseUrl}/dashboard/settings?addon_canceled=true`,
       metadata: {
         organizationId,

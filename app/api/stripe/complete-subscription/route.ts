@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { stripe } from '@/lib/stripe';
-import { STRIPE_ADDONS } from '@/lib/stripe-config';
+import { getPlanConfig } from '@/lib/stripe-config';
 import { getAdminDb } from '@/lib/firebase-admin';
 import { FieldValue } from 'firebase-admin/firestore';
 
@@ -26,28 +26,28 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Get organization ID and addon ID from session metadata
+    // Get organization ID from session metadata
     const organizationId = session.metadata?.organizationId || session.client_reference_id;
-    const addonId = session.metadata?.addonId;
+    const planId = session.metadata?.planId;
 
-    if (!organizationId || !addonId) {
+    if (!organizationId || !planId) {
       return NextResponse.json(
-        { error: 'Missing organizationId or addonId in session' },
+        { error: 'Missing organizationId or planId in session' },
         { status: 400 }
       );
     }
 
-    // Get addon configuration
-    const addonConfig = STRIPE_ADDONS[addonId];
-    if (!addonConfig) {
+    // Get plan configuration
+    const planConfig = getPlanConfig(planId);
+    if (!planConfig) {
       return NextResponse.json(
-        { error: 'Invalid addon' },
+        { error: 'Invalid plan' },
         { status: 400 }
       );
     }
 
     // Verify payment was successful
-    if (session.payment_status !== 'paid') {
+    if (session.status !== 'complete') {
       return NextResponse.json(
         { error: 'Payment not completed' },
         { status: 400 }
@@ -59,31 +59,30 @@ export async function POST(request: NextRequest) {
       const db = getAdminDb();
       const orgRef = db.collection('organizations').doc(organizationId);
 
-      // Get current organization data to preserve existing addons
-      const orgDoc = await orgRef.get();
-      const existingAddons = orgDoc.exists && orgDoc.data()?.addons ? orgDoc.data()!.addons : {};
+      // Calculate subscription period (30 days)
+      const now = new Date();
+      const periodEnd = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
 
-      // Update organization document with addon purchase
+      // Update organization document with subscription
       await orgRef.set({
-        addons: {
-          ...existingAddons,
-          [addonId]: {
-            purchased: true,
-            purchasedAt: FieldValue.serverTimestamp(),
-            stripePaymentIntentId: session.payment_intent,
-            amountPaid: session.amount_total ? session.amount_total / 100 : addonConfig.price,
-          },
+        subscription: {
+          plan: planId,
+          status: 'active',
+          limits: planConfig.limits,
+          stripeCustomerId: session.customer,
+          stripeSubscriptionId: session.subscription,
+          currentPeriodStart: FieldValue.serverTimestamp(),
+          currentPeriodEnd: periodEnd,
         },
         updatedAt: FieldValue.serverTimestamp(),
       }, { merge: true });
 
-      console.log('✅ Addon purchase completed for organization:', organizationId);
+      console.log('✅ Subscription activated for organization:', organizationId);
 
       return NextResponse.json({
         success: true,
         organizationId,
-        addonId,
-        addonName: addonConfig.name,
+        planId,
       });
     } catch (firestoreError) {
       console.error('❌ Firestore update error:', firestoreError);
@@ -96,10 +95,10 @@ export async function POST(request: NextRequest) {
       );
     }
   } catch (error) {
-    console.error('Error completing addon purchase:', error);
+    console.error('Error completing subscription:', error);
     return NextResponse.json(
       {
-        error: 'Failed to complete addon purchase',
+        error: 'Failed to complete subscription',
         details: error instanceof Error ? error.message : String(error),
       },
       { status: 500 }
