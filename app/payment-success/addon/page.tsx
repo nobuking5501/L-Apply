@@ -3,6 +3,8 @@
 import { useEffect, useState } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { onAuthStateChanged } from 'firebase/auth';
+import { auth } from '@/lib/firebase';
 
 // Force dynamic rendering for useSearchParams
 export const dynamic = 'force-dynamic';
@@ -13,6 +15,7 @@ export default function AddonSuccessPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [countdown, setCountdown] = useState(5);
+  const [waitingForAuth, setWaitingForAuth] = useState(true);
   const sessionId = searchParams.get('session_id');
 
   useEffect(() => {
@@ -21,9 +24,38 @@ export default function AddonSuccessPage() {
     }
   }, [sessionId]);
 
-  // Start countdown and redirect when purchase is complete
+  // Wait for Firebase auth to be ready before redirecting
   useEffect(() => {
-    if (!loading && !error) {
+    if (loading) return; // Wait for purchase completion first
+
+    console.log('🔐 Waiting for Firebase auth to be ready...');
+
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      if (user) {
+        console.log('✅ Auth confirmed, user:', user.uid);
+        setWaitingForAuth(false);
+      } else {
+        console.log('⚠️ No authenticated user detected');
+      }
+    });
+
+    // Timeout: if auth doesn't confirm within 10 seconds, proceed anyway
+    const authTimeout = setTimeout(() => {
+      console.log('⏱️ Auth timeout - proceeding with redirect');
+      setWaitingForAuth(false);
+    }, 10000);
+
+    return () => {
+      unsubscribe();
+      clearTimeout(authTimeout);
+    };
+  }, [loading]);
+
+  // Start countdown and redirect when auth is ready
+  useEffect(() => {
+    if (!loading && !error && !waitingForAuth) {
+      console.log('🚀 Starting countdown for redirect...');
+
       // Start countdown
       const countdownInterval = setInterval(() => {
         setCountdown((prev) => {
@@ -46,7 +78,7 @@ export default function AddonSuccessPage() {
         clearTimeout(redirectTimer);
       };
     }
-  }, [loading, error, router]);
+  }, [loading, error, waitingForAuth, router]);
 
   const completeAddonPurchase = async () => {
     try {
@@ -80,6 +112,7 @@ export default function AddonSuccessPage() {
       console.error('❌ Error completing addon purchase:', err);
       setError(err instanceof Error ? err.message : 'アドオン購入の完了に失敗しました');
       setLoading(false);
+      setWaitingForAuth(false); // Skip auth wait on error
     }
   };
 
@@ -125,7 +158,7 @@ export default function AddonSuccessPage() {
     );
   }
 
-  if (loading) {
+  if (loading || waitingForAuth) {
     return (
       <div className="max-w-2xl mx-auto text-center py-12">
         <div className="bg-white rounded-lg shadow p-8">
@@ -133,7 +166,9 @@ export default function AddonSuccessPage() {
             <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-600"></div>
           </div>
           <h1 className="text-2xl font-bold text-gray-900 mb-4">処理中...</h1>
-          <p className="text-gray-600">サポートサービスの購入を完了しています</p>
+          <p className="text-gray-600">
+            {loading ? 'サポートサービスの購入を完了しています' : '認証情報を確認しています'}
+          </p>
         </div>
       </div>
     );
