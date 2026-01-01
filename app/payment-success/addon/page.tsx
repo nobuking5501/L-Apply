@@ -16,45 +16,47 @@ export default function AddonSuccessPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [countdown, setCountdown] = useState(isPopup ? 3 : 5); // ポップアップは3秒、通常は5秒
-  const [waitingForAuth, setWaitingForAuth] = useState(true);
+  const [authReady, setAuthReady] = useState(false);
   const sessionId = searchParams.get('session_id');
 
+  // Wait for Firebase auth to initialize FIRST before doing anything
   useEffect(() => {
-    if (sessionId) {
-      completeAddonPurchase();
-    }
-  }, [sessionId]);
-
-  // Wait for Firebase auth to be ready before redirecting
-  useEffect(() => {
-    if (loading) return; // Wait for purchase completion first
-
-    console.log('🔐 Waiting for Firebase auth to be ready...');
+    console.log('🔐 [Payment Success] Waiting for Firebase auth to initialize...');
 
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       if (user) {
-        console.log('✅ Auth confirmed, user:', user.uid);
-        setWaitingForAuth(false);
+        console.log('✅ [Payment Success] Auth ready, user:', user.uid);
+        setAuthReady(true);
       } else {
-        console.log('⚠️ No authenticated user detected');
+        console.log('⚠️ [Payment Success] No authenticated user detected');
+        // Still mark as ready so we can show proper error message
+        setAuthReady(true);
       }
     });
 
-    // Timeout: if auth doesn't confirm within 10 seconds, proceed anyway
+    // Timeout: if auth doesn't initialize within 5 seconds, proceed anyway
     const authTimeout = setTimeout(() => {
-      console.log('⏱️ Auth timeout - proceeding with redirect');
-      setWaitingForAuth(false);
-    }, 10000);
+      console.log('⏱️ [Payment Success] Auth initialization timeout - proceeding');
+      setAuthReady(true);
+    }, 5000);
 
     return () => {
       unsubscribe();
       clearTimeout(authTimeout);
     };
-  }, [loading]);
+  }, []);
 
-  // Start countdown and redirect/close when auth is ready
+  // Execute purchase completion when both auth is ready and sessionId is available
   useEffect(() => {
-    if (!loading && !error && !waitingForAuth) {
+    if (authReady && sessionId && loading) {
+      console.log('🚀 [Payment Success] Auth ready and sessionId available, starting purchase completion');
+      completeAddonPurchase();
+    }
+  }, [authReady, sessionId]);
+
+  // Start countdown and redirect/close when purchase completion is done
+  useEffect(() => {
+    if (!loading && !error) {
       if (isPopup) {
         console.log('✅ [Popup Mode] Purchase complete, closing window in 3 seconds...');
 
@@ -106,7 +108,7 @@ export default function AddonSuccessPage() {
         };
       }
     }
-  }, [loading, error, waitingForAuth, isPopup, router]);
+  }, [loading, error, isPopup, router]);
 
   const completeAddonPurchase = async () => {
     try {
@@ -189,7 +191,6 @@ export default function AddonSuccessPage() {
 
       setError(err instanceof Error ? err.message : 'アドオン購入の完了に失敗しました');
       setLoading(false);
-      setWaitingForAuth(false); // Skip auth wait on error
     }
   };
 
@@ -235,7 +236,7 @@ export default function AddonSuccessPage() {
     );
   }
 
-  if (loading || waitingForAuth) {
+  if (loading) {
     return (
       <div className="max-w-2xl mx-auto text-center py-12">
         <div className="bg-white rounded-lg shadow p-8">
@@ -244,7 +245,7 @@ export default function AddonSuccessPage() {
           </div>
           <h1 className="text-2xl font-bold text-gray-900 mb-4">処理中...</h1>
           <p className="text-gray-600">
-            {loading ? 'サポートサービスの購入を完了しています' : '認証情報を確認しています'}
+            サポートサービスの購入を完了しています
           </p>
         </div>
       </div>
