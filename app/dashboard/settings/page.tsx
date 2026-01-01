@@ -10,15 +10,19 @@ import { Save, AlertCircle, Copy, CheckCircle } from 'lucide-react';
 import type { Organization } from '@/types';
 import SupportServiceOverlay from '@/components/SupportServiceOverlay';
 import Link from 'next/link';
+import { useSearchParams, useRouter } from 'next/navigation';
 
 export default function SettingsPage() {
   const { user, userData } = useAuth(); // Get user from AuthContext
+  const searchParams = useSearchParams();
+  const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [success, setSuccess] = useState(false);
   const [organization, setOrganization] = useState<Organization | null>(null);
   const [copiedUrl, setCopiedUrl] = useState<string | null>(null);
   const [hasPurchasedSupport, setHasPurchasedSupport] = useState(false);
+  const [verifyingPurchase, setVerifyingPurchase] = useState(false);
 
   // Form state
   const [orgName, setOrgName] = useState('');
@@ -35,6 +39,62 @@ export default function SettingsPage() {
   const [showFullToken, setShowFullToken] = useState(false);
   const [testingConnection, setTestingConnection] = useState(false);
   const [connectionResult, setConnectionResult] = useState<any>(null);
+
+  // Verify addon purchase with retry logic (used when redirected from payment success)
+  const verifyAddonPurchaseWithRetry = async (retryCount = 0): Promise<boolean> => {
+    const MAX_RETRIES = 5;
+    const RETRY_DELAY = 1500; // 1.5 seconds
+
+    try {
+      console.log(`🔍 [Settings Verify ${retryCount + 1}/${MAX_RETRIES}] Checking addon purchase...`);
+
+      if (!userData?.organizationId || !user) return false;
+
+      // Fetch from API with cache busting
+      const idToken = await user.getIdToken(true); // Force refresh token
+      const cacheBuster = Date.now();
+      const response = await fetch(`/api/settings?_=${cacheBuster}`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${idToken}`,
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache',
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        const isPurchased = data.organization?.addons?.support?.purchased === true;
+
+        if (isPurchased) {
+          console.log('✅ [Settings] Addon purchase verified!');
+          return true;
+        } else {
+          console.log(`⏳ [Settings] Purchase not yet visible (attempt ${retryCount + 1}/${MAX_RETRIES})`);
+          console.log('Current addons:', data.organization?.addons);
+        }
+      }
+
+      // If not verified and retries remaining, wait and try again
+      if (retryCount < MAX_RETRIES - 1) {
+        await new Promise((resolve) => setTimeout(resolve, RETRY_DELAY));
+        return verifyAddonPurchaseWithRetry(retryCount + 1);
+      }
+
+      console.error('❌ [Settings] Max retries reached, purchase not verified');
+      return false;
+    } catch (err) {
+      console.error('❌ [Settings] Error verifying addon purchase:', err);
+
+      // If error and retries remaining, try again
+      if (retryCount < MAX_RETRIES - 1) {
+        await new Promise((resolve) => setTimeout(resolve, RETRY_DELAY));
+        return verifyAddonPurchaseWithRetry(retryCount + 1);
+      }
+
+      return false;
+    }
+  };
 
   useEffect(() => {
     if (!userData?.organizationId || !user) return;
@@ -192,6 +252,30 @@ export default function SettingsPage() {
     fetchOrganization();
   }, [userData, user]);
 
+  // Handle addon_purchased URL parameter (from payment success redirect)
+  useEffect(() => {
+    const addonPurchased = searchParams.get('addon_purchased');
+
+    if (addonPurchased === 'true' && !loading && userData?.organizationId && user) {
+      console.log('🎯 [Settings] Detected addon_purchased=true parameter, verifying purchase...');
+      setVerifyingPurchase(true);
+
+      verifyAddonPurchaseWithRetry().then((verified) => {
+        if (verified) {
+          console.log('✅ [Settings] Purchase verified successfully!');
+          setHasPurchasedSupport(true);
+
+          // Clean up URL by removing the parameter
+          router.replace('/dashboard/settings', { scroll: false });
+        } else {
+          console.warn('⚠️ [Settings] Could not verify purchase, but continuing anyway');
+          // User might need to refresh manually
+        }
+        setVerifyingPurchase(false);
+      });
+    }
+  }, [searchParams, loading, userData, user]);
+
   const handleTestConnection = async () => {
     if (!user) return;
 
@@ -330,12 +414,19 @@ export default function SettingsPage() {
     }
   };
 
-  if (loading) {
+  if (loading || verifyingPurchase) {
     return (
       <div className="flex items-center justify-center h-64">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">読み込み中...</p>
+          <p className="mt-4 text-gray-600">
+            {verifyingPurchase ? 'サポートサービスの購入を確認中...' : '読み込み中...'}
+          </p>
+          {verifyingPurchase && (
+            <p className="mt-2 text-sm text-gray-500">
+              データの反映を待っています（最大7秒）
+            </p>
+          )}
         </div>
       </div>
     );

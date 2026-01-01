@@ -68,9 +68,10 @@ export default function AddonSuccessPage() {
       }, 1000);
 
       // Redirect after 5 seconds using window.location for full page reload
+      // Add query parameter to signal successful purchase
       const redirectTimer = setTimeout(() => {
-        console.log('🔄 Redirecting to settings page...');
-        window.location.href = '/dashboard/settings';
+        console.log('🔄 Redirecting to settings page with addon_purchased flag...');
+        window.location.href = '/dashboard/settings?addon_purchased=true';
       }, 5000);
 
       return () => {
@@ -80,10 +81,63 @@ export default function AddonSuccessPage() {
     }
   }, [loading, error, waitingForAuth, router]);
 
+  const verifyAddonPurchase = async (organizationId: string, retryCount = 0): Promise<boolean> => {
+    const MAX_RETRIES = 10;
+    const RETRY_DELAY = 1000; // 1 second
+
+    try {
+      console.log(`🔍 [Retry ${retryCount + 1}/${MAX_RETRIES}] Verifying addon purchase for org:`, organizationId);
+
+      // Fetch organization data from Firestore to verify purchase
+      const { doc, getDoc } = await import('firebase/firestore');
+      const { db } = await import('@/lib/firebase');
+
+      const orgRef = doc(db, 'organizations', organizationId);
+      const orgSnap = await getDoc(orgRef);
+
+      if (orgSnap.exists()) {
+        const orgData = orgSnap.data();
+        const isPurchased = orgData?.addons?.support?.purchased === true;
+
+        if (isPurchased) {
+          console.log('✅ Purchase verified! addons.support.purchased = true');
+          return true;
+        } else {
+          console.log(`⏳ Purchase not yet reflected in Firestore (attempt ${retryCount + 1}/${MAX_RETRIES})`);
+          console.log('Current addons data:', orgData?.addons);
+        }
+      } else {
+        console.error('❌ Organization document not found');
+      }
+
+      // If not verified and retries remaining, wait and try again
+      if (retryCount < MAX_RETRIES - 1) {
+        await new Promise((resolve) => setTimeout(resolve, RETRY_DELAY));
+        return verifyAddonPurchase(organizationId, retryCount + 1);
+      }
+
+      // Max retries reached
+      console.error('❌ Max retries reached, purchase not verified');
+      return false;
+    } catch (err) {
+      console.error('❌ Error verifying addon purchase:', err);
+
+      // If error and retries remaining, try again
+      if (retryCount < MAX_RETRIES - 1) {
+        await new Promise((resolve) => setTimeout(resolve, RETRY_DELAY));
+        return verifyAddonPurchase(organizationId, retryCount + 1);
+      }
+
+      return false;
+    }
+  };
+
   const completeAddonPurchase = async () => {
     try {
       setLoading(true);
       setError(null);
+
+      console.log('🛒 Starting addon purchase completion...');
 
       // Call server-side API to complete purchase
       const response = await fetch('/api/stripe/complete-addon-purchase', {
@@ -102,12 +156,25 @@ export default function AddonSuccessPage() {
       }
 
       const result = await response.json();
-      console.log('✅ Addon purchase completed:', result);
+      console.log('✅ Addon purchase API call completed:', result);
+
+      // IMPORTANT: Verify that the purchase was actually written to Firestore
+      // This prevents race conditions where the page redirects before data is available
+      if (result.organizationId) {
+        console.log('🔍 Verifying purchase data in Firestore...');
+        const isVerified = await verifyAddonPurchase(result.organizationId);
+
+        if (!isVerified) {
+          throw new Error('購入データの反映を確認できませんでした。時間をおいて設定ページを確認してください。');
+        }
+
+        console.log('✅ Purchase verified in Firestore, ready to redirect');
+      }
 
       // Wait a moment before showing success
       setTimeout(() => {
         setLoading(false);
-      }, 1000);
+      }, 500);
     } catch (err) {
       console.error('❌ Error completing addon purchase:', err);
       setError(err instanceof Error ? err.message : 'アドオン購入の完了に失敗しました');
