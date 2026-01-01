@@ -576,23 +576,6 @@ export default function SettingsPage() {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            {/* DEBUG INFO - Remove after confirmation */}
-            <div className="bg-yellow-50 border-2 border-yellow-400 p-4 rounded-md">
-              <p className="text-xs font-bold text-yellow-900 mb-2">🔧 デバッグ情報（確認後削除予定）:</p>
-              <p className="text-xs text-yellow-800 font-mono">
-                secretsMetadata: {secretsMetadata ? 'EXISTS' : 'NULL'}
-              </p>
-              {secretsMetadata && (
-                <>
-                  <p className="text-xs text-yellow-800 font-mono">
-                    hasChannelSecret: {String(secretsMetadata.hasChannelSecret)}
-                  </p>
-                  <p className="text-xs text-yellow-800 font-mono">
-                    hasChannelAccessToken: {String(secretsMetadata.hasChannelAccessToken)}
-                  </p>
-                </>
-              )}
-            </div>
             <div className="bg-blue-50 border border-blue-200 p-4 rounded-md">
               <p className="text-sm text-blue-900">
                 <strong>取得方法:</strong>{' '}
