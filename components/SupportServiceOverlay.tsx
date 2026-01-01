@@ -73,11 +73,13 @@ export default function SupportServiceOverlay({
       const checkPopupClosed = setInterval(() => {
         if (popup.closed) {
           clearInterval(checkPopupClosed);
-          console.log('[Support Overlay] Popup closed, will refresh page to check purchase status');
-          // 少し待ってからリフレッシュ（Webhookの処理を待つ）
+          console.log('[Support Overlay] Popup closed, navigating to settings page with addon_purchased flag...');
+          // Webhookの処理を待ってから設定ページに遷移（addon_purchased=trueパラメータ付き）
+          // このパラメータにより、設定ページのリトライロジックが起動する
           setTimeout(() => {
-            window.location.reload();
-          }, 2000);
+            console.log('[Support Overlay] Redirecting to /dashboard/settings?addon_purchased=true');
+            window.location.href = '/dashboard/settings?addon_purchased=true';
+          }, 3000); // 3秒待機してWebhookの処理を確保
         }
       }, 500);
     } catch (err) {

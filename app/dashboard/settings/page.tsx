@@ -42,8 +42,8 @@ export default function SettingsPage() {
 
   // Verify addon purchase with retry logic (used when redirected from payment success)
   const verifyAddonPurchaseWithRetry = async (retryCount = 0): Promise<boolean> => {
-    const MAX_RETRIES = 5;
-    const RETRY_DELAY = 1500; // 1.5 seconds
+    const MAX_RETRIES = 8; // Increased from 5 to 8 for more reliability
+    const RETRY_DELAY = 2000; // Increased from 1500ms to 2000ms (2 seconds)
 
     try {
       console.log(`🔍 [Settings Verify ${retryCount + 1}/${MAX_RETRIES}] Checking addon purchase...`);
@@ -64,30 +64,43 @@ export default function SettingsPage() {
 
       if (response.ok) {
         const data = await response.json();
-        const isPurchased = data.organization?.addons?.support?.purchased === true;
+        const supportAddon = data.organization?.addons?.support;
+        const isPurchased = supportAddon?.purchased === true;
 
         if (isPurchased) {
           console.log('✅ [Settings] Addon purchase verified!');
+          console.log('✅ [Settings] Purchase source:', supportAddon?.source || 'unknown');
+          console.log('✅ [Settings] Purchase data:', {
+            purchased: supportAddon?.purchased,
+            purchasedAt: supportAddon?.purchasedAt,
+            amountPaid: supportAddon?.amountPaid,
+            source: supportAddon?.source,
+          });
           return true;
         } else {
           console.log(`⏳ [Settings] Purchase not yet visible (attempt ${retryCount + 1}/${MAX_RETRIES})`);
-          console.log('Current addons:', data.organization?.addons);
+          console.log('⏳ [Settings] Current addons:', data.organization?.addons);
         }
+      } else {
+        console.warn(`⚠️ [Settings] API response not OK: ${response.status} ${response.statusText}`);
       }
 
       // If not verified and retries remaining, wait and try again
       if (retryCount < MAX_RETRIES - 1) {
+        console.log(`⏳ [Settings] Waiting ${RETRY_DELAY}ms before retry...`);
         await new Promise((resolve) => setTimeout(resolve, RETRY_DELAY));
         return verifyAddonPurchaseWithRetry(retryCount + 1);
       }
 
       console.error('❌ [Settings] Max retries reached, purchase not verified');
+      console.error('❌ [Settings] This may indicate Webhook processing is still in progress');
       return false;
     } catch (err) {
       console.error('❌ [Settings] Error verifying addon purchase:', err);
 
       // If error and retries remaining, try again
       if (retryCount < MAX_RETRIES - 1) {
+        console.log(`⏳ [Settings] Error encountered, waiting ${RETRY_DELAY}ms before retry...`);
         await new Promise((resolve) => setTimeout(resolve, RETRY_DELAY));
         return verifyAddonPurchaseWithRetry(retryCount + 1);
       }
@@ -424,7 +437,7 @@ export default function SettingsPage() {
           </p>
           {verifyingPurchase && (
             <p className="mt-2 text-sm text-gray-500">
-              データの反映を待っています（最大7秒）
+              データの反映を待っています（最大16秒）
             </p>
           )}
         </div>
