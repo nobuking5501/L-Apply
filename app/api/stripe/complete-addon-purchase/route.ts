@@ -42,7 +42,14 @@ export async function POST(request: NextRequest) {
     const organizationId = session.metadata?.organizationId || session.client_reference_id;
     const addonId = session.metadata?.addonId;
 
+    console.log('[Complete Addon] 🎯🎯🎯 Session metadata.organizationId:', session.metadata?.organizationId);
+    console.log('[Complete Addon] 🎯🎯🎯 Session client_reference_id:', session.client_reference_id);
+    console.log('[Complete Addon] 🎯🎯🎯 Final organizationId to use:', organizationId);
+
     if (!organizationId || !addonId) {
+      console.error('[Complete Addon] ❌ Missing organizationId or addonId');
+      console.error('[Complete Addon] ❌ Session metadata:', session.metadata);
+      console.error('[Complete Addon] ❌ Session client_reference_id:', session.client_reference_id);
       return NextResponse.json(
         { error: 'Missing organizationId or addonId in session' },
         { status: 400 }

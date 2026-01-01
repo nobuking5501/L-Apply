@@ -25,7 +25,8 @@ export default function SupportServiceOverlay({
       setLoading(true);
       setError(null);
 
-      console.log('[Support Overlay] Creating checkout session...');
+      console.log('[Support Overlay] 🎯 Creating checkout session...');
+      console.log('[Support Overlay] 🎯 Organization ID:', organizationId);
 
       const response = await fetch('/api/stripe/create-addon-checkout-session', {
         method: 'POST',
@@ -38,6 +39,8 @@ export default function SupportServiceOverlay({
           usePopup: true, // ポップアップモードを指定
         }),
       });
+
+      console.log('[Support Overlay] 🎯 Checkout API response status:', response.status);
 
       if (!response.ok) {
         const data = await response.json();

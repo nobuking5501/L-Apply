@@ -7,7 +7,8 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { organizationId, addonId, usePopup } = body;
 
-    console.log('[Addon Checkout] Request:', { organizationId, addonId, usePopup });
+    console.log('[Addon Checkout] 🎯🎯🎯 Request:', { organizationId, addonId, usePopup });
+    console.log('[Addon Checkout] 🎯🎯🎯 Received organizationId:', organizationId);
 
     if (!organizationId || !addonId) {
       return NextResponse.json(
@@ -78,7 +79,9 @@ export async function POST(request: NextRequest) {
       allow_promotion_codes: true,
     });
 
-    console.log('[Addon Checkout] Session created:', session.id);
+    console.log('[Addon Checkout] 🎯🎯🎯 Session created:', session.id);
+    console.log('[Addon Checkout] 🎯🎯🎯 Session metadata:', session.metadata);
+    console.log('[Addon Checkout] 🎯🎯🎯 Session client_reference_id:', session.client_reference_id);
     return NextResponse.json({ url: session.url });
   } catch (error) {
     console.error('[Addon Checkout] Error creating checkout session:', error);
