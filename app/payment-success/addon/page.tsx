@@ -3,6 +3,8 @@
 import { useEffect, useState } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { onAuthStateChanged } from 'firebase/auth';
+import { auth } from '@/lib/firebase';
 
 // Force dynamic rendering for useSearchParams
 export const dynamic = 'force-dynamic';
@@ -12,7 +14,22 @@ export default function AddonSuccessPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [authReady, setAuthReady] = useState(false);
   const sessionId = searchParams.get('session_id');
+
+  // Monitor authentication state
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      if (user) {
+        console.log('✅ User authenticated:', user.uid);
+        setAuthReady(true);
+      } else {
+        console.log('⚠️ User not authenticated yet');
+      }
+    });
+
+    return () => unsubscribe();
+  }, []);
 
   useEffect(() => {
     if (sessionId) {
@@ -45,10 +62,19 @@ export default function AddonSuccessPage() {
       const result = await response.json();
       console.log('Addon purchase completed:', result);
 
-      // Wait a moment before showing success message
+      // Wait for authentication to be ready before showing success
+      const checkAuth = setInterval(() => {
+        if (auth.currentUser) {
+          clearInterval(checkAuth);
+          setLoading(false);
+        }
+      }, 500);
+
+      // Fallback: show success after 5 seconds even if auth not ready
       setTimeout(() => {
+        clearInterval(checkAuth);
         setLoading(false);
-      }, 1000);
+      }, 5000);
     } catch (err) {
       console.error('Error completing addon purchase:', err);
       setError(err instanceof Error ? err.message : 'アドオン購入の完了に失敗しました');
@@ -142,19 +168,47 @@ export default function AddonSuccessPage() {
           設定ページから各種設定を行うことができます。
         </p>
 
+        {!authReady && (
+          <div className="mb-6 bg-blue-50 border border-blue-200 rounded-lg p-4">
+            <div className="flex items-center justify-center">
+              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600 mr-3"></div>
+              <p className="text-sm text-blue-700">アカウント情報を確認しています...</p>
+            </div>
+          </div>
+        )}
+
         <div className="space-y-4">
-          <Link
-            href="/dashboard/settings"
-            className="block bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 font-medium"
-          >
-            設定ページに進む
-          </Link>
-          <Link
-            href="/dashboard"
-            className="block bg-gray-100 text-gray-700 px-6 py-3 rounded-lg hover:bg-gray-200 font-medium"
-          >
-            ダッシュボードに戻る
-          </Link>
+          {authReady ? (
+            <>
+              <Link
+                href="/dashboard/settings"
+                className="block bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 font-medium"
+              >
+                設定ページに進む
+              </Link>
+              <Link
+                href="/dashboard"
+                className="block bg-gray-100 text-gray-700 px-6 py-3 rounded-lg hover:bg-gray-200 font-medium"
+              >
+                ダッシュボードに戻る
+              </Link>
+            </>
+          ) : (
+            <>
+              <button
+                disabled
+                className="block w-full bg-gray-300 text-gray-500 px-6 py-3 rounded-lg font-medium cursor-not-allowed"
+              >
+                設定ページに進む
+              </button>
+              <button
+                disabled
+                className="block w-full bg-gray-200 text-gray-400 px-6 py-3 rounded-lg font-medium cursor-not-allowed"
+              >
+                ダッシュボードに戻る
+              </button>
+            </>
+          )}
         </div>
 
         <div className="mt-8 pt-8 border-t border-gray-200">
