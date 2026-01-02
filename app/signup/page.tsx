@@ -47,7 +47,8 @@ export default function SignupPage() {
 
     try {
       await signUp(email, password, displayName, selectedPlan);
-      router.push('/dashboard');
+      // Use window.location to force a full page reload and ensure userData is loaded
+      window.location.href = '/dashboard';
     } catch (err: any) {
       console.error('Signup error:', err);
       if (err.code === 'auth/email-already-in-use') {

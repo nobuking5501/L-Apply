@@ -101,9 +101,36 @@ export default function GuidePage() {
               </div>
             </div>
 
+            <div className="flex items-start bg-amber-50 p-4 rounded-lg border-2 border-amber-300">
+              <div className="flex-shrink-0 w-8 h-8 bg-amber-600 text-white rounded-full flex items-center justify-center font-bold mr-3">
+                2
+              </div>
+              <div className="flex-1">
+                <h4 className="font-semibold text-gray-900 flex items-center">
+                  設定ページを解放する
+                  <span className="ml-2 text-xs bg-amber-200 text-amber-900 px-2 py-0.5 rounded">重要</span>
+                </h4>
+                <p className="text-sm text-gray-600 mt-1">
+                  設定ページを利用するには、<strong className="text-amber-900">サポートサービス</strong>の購入が必要です。
+                  <br />
+                  <span className="text-xs text-gray-500 mt-1 block">
+                    💡 サポートサービスには、LINE連携の初期設定サポートと使い方レクチャーが含まれています（¥15,000・一回限り）
+                  </span>
+                </p>
+                <div className="mt-2 bg-white p-3 rounded border border-amber-200">
+                  <p className="text-xs font-semibold text-gray-900 mb-2">📝 購入手順：</p>
+                  <ol className="list-decimal list-inside text-xs text-gray-700 space-y-1 pl-2">
+                    <li>「サポートプラン」メニューをクリック</li>
+                    <li>「追加サービス」セクションでサポートサービスを購入</li>
+                    <li>決済完了後、設定ページが使えるようになります</li>
+                  </ol>
+                </div>
+              </div>
+            </div>
+
             <div className="flex items-start bg-green-50 p-4 rounded-lg">
               <div className="flex-shrink-0 w-8 h-8 bg-green-600 text-white rounded-full flex items-center justify-center font-bold mr-3">
-                2
+                3
               </div>
               <div className="flex-1">
                 <h4 className="font-semibold text-gray-900">LINEとL-Applyを連携</h4>
@@ -115,17 +142,30 @@ export default function GuidePage() {
               </div>
             </div>
 
-            <div className="flex items-start bg-purple-50 p-4 rounded-lg">
+            <div className="flex items-start bg-purple-50 p-4 rounded-lg border-2 border-purple-300">
               <div className="flex-shrink-0 w-8 h-8 bg-purple-600 text-white rounded-full flex items-center justify-center font-bold mr-3">
-                3
+                4
               </div>
               <div className="flex-1">
-                <h4 className="font-semibold text-gray-900">セミナー情報を登録</h4>
+                <h4 className="font-semibold text-gray-900 flex items-center">
+                  セミナー情報を登録
+                  <span className="ml-2 text-xs bg-purple-200 text-purple-900 px-2 py-0.5 rounded">プラン要確認</span>
+                </h4>
                 <p className="text-sm text-gray-600 mt-1">
                   「イベント管理」メニューから、セミナーの日程や定員を設定します。
                   <br />
                   <span className="text-xs text-gray-500">（例：「個別相談会」2月10日 10:00〜、定員5名）</span>
                 </p>
+                <div className="mt-2 bg-white p-3 rounded border border-purple-200">
+                  <p className="text-xs font-semibold text-gray-900 mb-2">📊 プランによる制限：</p>
+                  <ul className="text-xs text-gray-700 space-y-1 pl-4">
+                    <li>• <strong>フリープラン</strong>：イベント作成数に制限あり</li>
+                    <li>• <strong>有料プラン</strong>：より多くのイベントやリマインダーを作成可能</li>
+                  </ul>
+                  <p className="text-xs text-gray-600 mt-2">
+                    💡 制限を超える場合は「サポートプラン」メニューからプランをアップグレードしてください
+                  </p>
+                </div>
               </div>
             </div>
 
@@ -136,9 +176,9 @@ export default function GuidePage() {
               <div className="flex-1">
                 <h4 className="font-semibold text-gray-900">申し込みページをLINEで配信</h4>
                 <p className="text-sm text-gray-600 mt-1">
-                  「設定」ページに表示される「申し込みページURL」を、LINE公式アカウントで配信します。
+                  ここはリッチメニューに設定してください。
                   <br />
-                  <span className="text-xs text-gray-500">（お客様がこのURLをタップすると、申し込みフォームが開きます）</span>
+                  <span className="text-xs text-gray-500">リッチメニューの設定が分からない人は、サポートに問い合わせしてください。</span>
                 </p>
               </div>
             </div>
@@ -207,6 +247,39 @@ export default function GuidePage() {
                 <br />
                 💡 「Messaging API」= LINEで自動メッセージを送る機能のことです
               </p>
+              <div className="bg-blue-50 border-l-4 border-blue-400 p-3 rounded mt-3 ml-4">
+                <p className="text-xs text-blue-900">
+                  <strong>📋 プライバシーポリシー・利用規約は下記のURLをお使いください</strong>
+                  <br />
+                  <span className="text-xs text-blue-800 mt-1 block">
+                    チャネル作成時に「プライバシーポリシーURL」と「利用規約URL」の入力が必要です。
+                  </span>
+                </p>
+                <div className="mt-2 space-y-1">
+                  <p className="text-xs text-blue-900">
+                    🔒 プライバシーポリシー：
+                    <a
+                      href="https://l-apply.vercel.app/privacy-policy"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-blue-600 hover:underline font-mono ml-1"
+                    >
+                      https://l-apply.vercel.app/privacy-policy
+                    </a>
+                  </p>
+                  <p className="text-xs text-blue-900">
+                    📜 利用規約：
+                    <a
+                      href="https://l-apply.vercel.app/terms-of-service"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-blue-600 hover:underline font-mono ml-1"
+                    >
+                      https://l-apply.vercel.app/terms-of-service
+                    </a>
+                  </p>
+                </div>
+              </div>
             </div>
 
             {/* Step 2 */}
@@ -641,6 +714,101 @@ export default function GuidePage() {
               <br />
               <span className="text-xs">※ 返信まで1〜2営業日いただく場合があります</span>
             </p>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Privacy Policy and Terms */}
+      <Card className="bg-gradient-to-r from-blue-50 to-purple-50 border-blue-200">
+        <CardHeader>
+          <CardTitle className="flex items-center text-blue-900">
+            <BookOpen className="h-5 w-5 mr-2" />
+            プライバシーポリシー・利用規約
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="bg-white p-4 rounded-lg shadow-sm">
+            <p className="text-sm text-gray-700 mb-4">
+              <strong>📋 LINE Developers でチャネル作成時に必要な情報</strong>
+              <br />
+              <span className="text-xs text-gray-600">
+                LINE Messaging API のチャネルを作成する際、プライバシーポリシーとサービス利用規約のURLを入力する必要があります。
+                <br />
+                以下のL-Applyの各ページURLをご使用ください。
+              </span>
+            </p>
+
+            <div className="space-y-3">
+              <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
+                <p className="text-sm font-semibold text-gray-900 mb-2">
+                  🔒 プライバシーポリシー
+                </p>
+                <p className="text-xs text-gray-600 mb-2">
+                  個人情報の取り扱いについて記載されています
+                </p>
+                <div className="bg-white p-2 rounded border">
+                  <a
+                    href="/privacy-policy"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-sm text-blue-600 hover:text-blue-800 hover:underline break-all font-mono"
+                  >
+                    https://l-apply.vercel.app/privacy-policy
+                  </a>
+                </div>
+                <div className="mt-2">
+                  <a
+                    href="/privacy-policy"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center text-sm text-blue-600 hover:text-blue-800 hover:underline"
+                  >
+                    <ExternalLink className="h-3 w-3 mr-1" />
+                    ページを開く
+                  </a>
+                </div>
+              </div>
+
+              <div className="bg-purple-50 p-4 rounded-lg border border-purple-200">
+                <p className="text-sm font-semibold text-gray-900 mb-2">
+                  📜 サービス利用規約
+                </p>
+                <p className="text-xs text-gray-600 mb-2">
+                  サービスの利用条件について記載されています
+                </p>
+                <div className="bg-white p-2 rounded border">
+                  <a
+                    href="/terms-of-service"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-sm text-blue-600 hover:text-blue-800 hover:underline break-all font-mono"
+                  >
+                    https://l-apply.vercel.app/terms-of-service
+                  </a>
+                </div>
+                <div className="mt-2">
+                  <a
+                    href="/terms-of-service"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center text-sm text-blue-600 hover:text-blue-800 hover:underline"
+                  >
+                    <ExternalLink className="h-3 w-3 mr-1" />
+                    ページを開く
+                  </a>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-amber-50 border-l-4 border-amber-400 p-3 rounded mt-4">
+              <p className="text-xs text-amber-900">
+                <strong>💡 使い方：</strong>
+                <br />
+                LINE Developers でチャネル作成時に「プライバシーポリシーURL」と「利用規約URL」を入力する欄があります。
+                <br />
+                上記のURLをコピーして貼り付けてください。
+              </p>
+            </div>
           </div>
         </CardContent>
       </Card>
