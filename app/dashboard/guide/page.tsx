@@ -644,17 +644,40 @@ export default function GuidePage() {
             <p className="text-sm text-gray-700 mb-3">
               <strong className="text-lg text-gray-900">📧 困ったときは、お気軽にご連絡ください</strong>
             </p>
-            <div className="bg-green-50 p-4 rounded-lg border border-green-200">
-              <p className="text-sm text-gray-700 mb-2">
-                <strong>サポートメールアドレス：</strong>
-              </p>
-              <a
-                href="mailto:kwmlink2025@gmail.com"
-                className="text-lg font-mono text-blue-600 hover:text-blue-800 hover:underline block"
-              >
-                kwmlink2025@gmail.com
-              </a>
-              <p className="text-xs text-gray-600 mt-3">
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="bg-green-50 p-4 rounded-lg border border-green-200">
+                <p className="text-sm text-gray-700 mb-2">
+                  <strong>📧 サポートメール：</strong>
+                </p>
+                <a
+                  href="mailto:kwmlink2025@gmail.com"
+                  className="text-base font-mono text-blue-600 hover:text-blue-800 hover:underline block break-all"
+                >
+                  kwmlink2025@gmail.com
+                </a>
+              </div>
+
+              <div className="bg-green-50 p-4 rounded-lg border border-green-200">
+                <p className="text-sm text-gray-700 mb-2">
+                  <strong>💬 公式LINE：</strong>
+                </p>
+                <a
+                  href="https://lin.ee/j26yFRB"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-base font-mono text-blue-600 hover:text-blue-800 hover:underline block break-all"
+                >
+                  https://lin.ee/j26yFRB
+                </a>
+                <p className="text-xs text-gray-600 mt-2">
+                  LINEでもお問い合わせいただけます
+                </p>
+              </div>
+            </div>
+
+            <div className="bg-blue-50 p-3 rounded-lg border border-blue-200 mt-3">
+              <p className="text-xs text-gray-600">
                 💡 お問い合わせの際は、以下を書いていただけるとスムーズです：
               </p>
               <ul className="text-xs text-gray-600 mt-2 list-disc list-inside pl-2">
