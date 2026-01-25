@@ -1,6 +1,5 @@
 name: Deploy Firebase Functions
-
-  on:
+on:
     push:
       branches:
         - main
