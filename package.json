@@ -20,6 +20,7 @@
     "clsx": "^2.1.1",
     "date-fns": "^3.3.0",
     "date-fns-tz": "^3.0.0",
+    "dotenv": "^17.2.3",
     "firebase": "^10.8.0",
     "firebase-admin": "^13.6.0",
     "lucide-react": "^0.552.0",

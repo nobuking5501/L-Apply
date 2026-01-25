@@ -2,7 +2,7 @@
 
 export type PlanType = 'free' | 'standard' | 'premium';
 export type UserRole = 'admin' | 'owner' | 'member';
-export type StepDeliveryStatus = 'pending' | 'sent' | 'skipped';
+export type StepDeliveryStatus = 'pending' | 'sending' | 'sent' | 'skipped';
 
 export interface Organization {
   id: string;

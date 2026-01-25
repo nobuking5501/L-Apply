@@ -32,6 +32,11 @@ export const deliverSteps = onRequest(
 
       for (const delivery of deliveries) {
         try {
+          // IMPORTANT: Mark as "sending" FIRST to prevent duplicate sends
+          // This prevents race conditions where the same delivery is picked up
+          // by another scheduled run before it's marked as sent
+          await stepDelivery.markStepDeliveryAsSending(db, delivery.id!);
+
           // Check user consent
           const user = await firestore.getLineUser(delivery.userId);
 
@@ -62,8 +67,9 @@ export const deliverSteps = onRequest(
             }
           } catch (error) {
             console.error(`❌ Failed to get LINE credentials for organization ${delivery.organizationId}:`, error);
-            console.error(`Step delivery ${delivery.id} cannot be sent. Will retry on next run.`);
-            // Don't mark as skipped - will retry next time
+            console.error(`Step delivery ${delivery.id} cannot be sent. Resetting to pending for retry.`);
+            // Reset to pending so it can be retried
+            await stepDelivery.markStepDeliveryAsPending(db, delivery.id!);
             continue;
           }
 
@@ -83,8 +89,12 @@ export const deliverSteps = onRequest(
           );
         } catch (error) {
           console.error(`Failed to send step delivery ${delivery.id}:`, error);
-          // Don't mark as sent if it fails - will retry on next run
-          // But log the error for monitoring
+          // Reset to pending so it can be retried on next run
+          try {
+            await stepDelivery.markStepDeliveryAsPending(db, delivery.id!);
+          } catch (resetError) {
+            console.error(`Failed to reset step delivery ${delivery.id} to pending:`, resetError);
+          }
         }
       }
 

@@ -3,6 +3,7 @@ import { addDays, setHours, setMinutes, startOfDay } from 'date-fns';
 import { toZonedTime, fromZonedTime } from 'date-fns-tz';
 import { StepDelivery } from '../types';
 import { getAllSteps, getStepMessage, getStepDelayDays } from '../config/step-messages';
+import * as timezone from './timezone';
 
 const TIMEZONE = 'Asia/Tokyo';
 
@@ -47,6 +48,7 @@ export async function getStepMessageTemplates(
  * @param userId LINE ユーザーID
  * @param seminarDate セミナー開催日時（Timestamp）
  * @param organizationId 組織ID
+ * @param plan プラン名（変数置換用）
  * @param templates カスタムテンプレート（オプション）
  * @returns ステップ配信のデータ配列
  */
@@ -56,6 +58,7 @@ export async function createStepDeliverySchedule(
   userId: string,
   seminarDate: Timestamp,
   organizationId: string,
+  plan: string,
   templates?: StepMessageTemplate[]
 ): Promise<Omit<StepDelivery, 'id'>[]> {
   const now = Timestamp.now();
@@ -87,6 +90,12 @@ export async function createStepDeliverySchedule(
       const scheduledUtc = fromZonedTime(scheduledJst, TIMEZONE);
       const scheduledAt = Timestamp.fromDate(scheduledUtc);
 
+      // Replace variables in message
+      const message = template.message
+        .replace(/\{plan\}/g, plan)
+        .replace(/\{time\}/g, timezone.formatTimeOnly(seminarDate))
+        .replace(/\{datetime\}/g, timezone.formatDateTimeWithDayOfWeek(seminarDate));
+
       deliveries.push({
         applicationId,
         userId,
@@ -94,7 +103,7 @@ export async function createStepDeliverySchedule(
         scheduledAt,
         sentAt: null,
         status: 'pending',
-        message: template.message,
+        message,
         organizationId,
         createdAt: now,
       });
@@ -155,6 +164,21 @@ export async function getPendingStepDeliveries(
 }
 
 /**
+ * ステップ配信を送信中としてマーク（競合防止）
+ *
+ * @param db Firestore インスタンス
+ * @param deliveryId ステップ配信ID
+ */
+export async function markStepDeliveryAsSending(
+  db: FirebaseFirestore.Firestore,
+  deliveryId: string
+): Promise<void> {
+  await db.collection('step_deliveries').doc(deliveryId).update({
+    status: 'sending',
+  });
+}
+
+/**
  * ステップ配信を送信済みとしてマーク
  *
  * @param db Firestore インスタンス
@@ -184,6 +208,21 @@ export async function markStepDeliveryAsSkipped(
 ): Promise<void> {
   await db.collection('step_deliveries').doc(deliveryId).update({
     status: 'skipped',
+  });
+}
+
+/**
+ * ステップ配信をpendingに戻す（リトライ用）
+ *
+ * @param db Firestore インスタンス
+ * @param deliveryId ステップ配信ID
+ */
+export async function markStepDeliveryAsPending(
+  db: FirebaseFirestore.Firestore,
+  deliveryId: string
+): Promise<void> {
+  await db.collection('step_deliveries').doc(deliveryId).update({
+    status: 'pending',
   });
 }
 

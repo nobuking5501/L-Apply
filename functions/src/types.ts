@@ -4,7 +4,7 @@ export type ApplicationStatus = 'applied' | 'canceled';
 
 export type ReminderType = 'T-24h' | 'day-of' | 'custom';
 
-export type StepDeliveryStatus = 'pending' | 'sent' | 'skipped';
+export type StepDeliveryStatus = 'pending' | 'sending' | 'sent' | 'skipped';
 
 export interface LineUser {
   userId: string;

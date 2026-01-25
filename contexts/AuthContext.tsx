@@ -181,6 +181,36 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       });
       console.log('✅ Organization document created:', orgId);
 
+      // Create organization_secrets document (empty by default, to be configured in settings)
+      console.log('📝 Creating organization_secrets document...');
+      const secretsDocRef = doc(db, 'organization_secrets', orgId);
+      await setDoc(secretsDocRef, {
+        lineChannelAccessToken: '',
+        lineChannelSecret: '',
+        createdAt: now,
+        updatedAt: now,
+      });
+      console.log('✅ Organization secrets document created:', orgId);
+
+      // Create subscriptions document
+      console.log('📝 Creating subscriptions document...');
+      const subscriptionDocRef = doc(db, 'subscriptions', orgId);
+      await setDoc(subscriptionDocRef, {
+        organizationId: orgId,
+        tier: 'free',
+        status: 'active',
+        applicationLimit: getPlanLimits(plan).maxApplicationsPerMonth,
+        reminderLimit: getPlanLimits(plan).maxReminders,
+        stepDeliveryLimit: getPlanLimits(plan).maxStepDeliveries,
+        currentApplicationCount: 0,
+        currentReminderCount: 0,
+        currentStepDeliveryCount: 0,
+        addons: {},
+        createdAt: now,
+        updatedAt: now,
+      });
+      console.log('✅ Subscriptions document created:', orgId);
+
       // Create user document
       console.log('📝 Creating user document...');
       const userDocRef = doc(db, 'users', createdUser.uid);

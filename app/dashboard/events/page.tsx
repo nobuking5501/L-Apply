@@ -109,6 +109,39 @@ export default function EventsPage() {
   const handleCreateEvent = async () => {
     if (!userData?.organizationId) return;
 
+    // Validate form data
+    if (!formData.title.trim()) {
+      alert('タイトルを入力してください');
+      return;
+    }
+
+    if (!formData.location.trim()) {
+      alert('開催場所を入力してください');
+      return;
+    }
+
+    if (formData.slots.length === 0) {
+      alert('少なくとも1つの開催枠を追加してください');
+      return;
+    }
+
+    // Validate all slots
+    for (let i = 0; i < formData.slots.length; i++) {
+      const slot = formData.slots[i];
+      if (!slot.date) {
+        alert(`開催枠${i + 1}の日付を入力してください`);
+        return;
+      }
+      if (!slot.time) {
+        alert(`開催枠${i + 1}の時刻を入力してください`);
+        return;
+      }
+      if (!slot.maxCapacity || slot.maxCapacity < 1) {
+        alert(`開催枠${i + 1}の定員を1以上で入力してください`);
+        return;
+      }
+    }
+
     try {
       // Check subscription limits before creating event
       const orgDoc = await getDoc(doc(db, 'organizations', userData.organizationId));

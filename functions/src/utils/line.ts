@@ -37,19 +37,23 @@ export async function verifyIdToken(
   try {
     // Decode the ID token (without verification for simplicity)
     // In production, you should verify the token with LINE's public key
-    const decoded = jwt.decode(idToken) as { sub: string } | null;
+    const decoded = jwt.decode(idToken) as {
+      sub: string;
+      name?: string;
+      picture?: string;
+    } | null;
 
     if (!decoded || !decoded.sub) {
       throw new Error('Invalid ID token');
     }
 
-    // Get user profile from LINE
-    // IMPORTANT: Use the organization's access token for multi-tenant support
-    const profile = await getProfile(decoded.sub, accessToken);
+    // Use displayName from ID token if available (LIFF tokens include this)
+    // This avoids the need to call Messaging API, which requires friendship
+    const displayName = decoded.name || 'LINE User';
 
     return {
       userId: decoded.sub,
-      displayName: profile.displayName,
+      displayName: displayName,
     };
   } catch (error) {
     console.error('Failed to verify ID token:', error);

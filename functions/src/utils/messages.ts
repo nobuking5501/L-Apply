@@ -23,21 +23,12 @@ export function generateCompletionMessage(
       .replace(/\{time\}/g, timeStr);
   }
 
-  // Default message
+  // Default message (without hardcoded Zoom link)
   return `✅ お申し込みありがとうございます！
 
 【セミナー情報】
 ${plan}
 📅 ${slotStr}
-
-【参加方法】
-以下のZoomリンクからご参加ください。
-
-🔗 Zoomリンク
-https://us06web.zoom.us/j/87121074742?pwd=fkDi1VODGlqbs7jmseQFoI7FXhqqdd.1
-
-ミーティングID: 871 2107 4742
-パスコード: 300798
 
 ※前日と当日にリマインダーをお送りします。
 
@@ -54,12 +45,6 @@ export function generateT24hReminderMessage(plan: string, slotAt: Timestamp): st
 
 ${plan}
 
-🔗 Zoomリンク
-https://us06web.zoom.us/j/87121074742?pwd=fkDi1VODGlqbs7jmseQFoI7FXhqqdd.1
-
-ミーティングID: 871 2107 4742
-パスコード: 300798
-
 ご都合が悪い場合は「キャンセル」と返信ください。`;
 }
 
@@ -73,13 +58,7 @@ export function generateDayOfReminderMessage(plan: string, slotAt: Timestamp): s
 
 ${plan}
 
-🔗 Zoomリンク
-https://us06web.zoom.us/j/87121074742?pwd=fkDi1VODGlqbs7jmseQFoI7FXhqqdd.1
-
-ミーティングID: 871 2107 4742
-パスコード: 300798
-
-5分前にはZoomに接続してご準備をお願いします！`;
+5分前には準備をお願いします！`;
 }
 
 /**
@@ -113,12 +92,6 @@ export function generateReservationConfirmationMessage(plan: string, slotAt: Tim
 【セミナー情報】
 ${plan}
 📅 ${slotStr}
-
-🔗 Zoomリンク
-https://us06web.zoom.us/j/87121074742?pwd=fkDi1VODGlqbs7jmseQFoI7FXhqqdd.1
-
-ミーティングID: 871 2107 4742
-パスコード: 300798
 
 キャンセルをご希望の場合は「キャンセル」と返信してください。`;
 }

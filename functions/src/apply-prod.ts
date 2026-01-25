@@ -190,7 +190,8 @@ export const apply = onRequest(
             // Replace variables in message
             const message = template.message
               .replace(/\{plan\}/g, body.plan)
-              .replace(/\{time\}/g, timezone.formatTimeOnly(slotAt));
+              .replace(/\{time\}/g, timezone.formatTimeOnly(slotAt))
+              .replace(/\{datetime\}/g, timezone.formatDateTimeWithDayOfWeek(slotAt));
 
             return {
               type: template.reminderType as ReminderType,
@@ -270,7 +271,8 @@ export const apply = onRequest(
         applicationId,
         userId,
         slotAt,
-        orgConfig.organizationId
+        orgConfig.organizationId,
+        body.plan
       );
 
       // Check subscription limits for step deliveries

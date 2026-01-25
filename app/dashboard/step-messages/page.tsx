@@ -853,12 +853,12 @@ L-Applyへようこそ！
         )}
       </div>
 
-      {/* 申込後メッセージセクション */}
+      {/* イベント終了後メッセージセクション */}
       <div>
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center space-x-2">
             <Clock className="h-5 w-5 text-purple-600" />
-            <h3 className="text-lg font-semibold text-gray-900">申込後メッセージ</h3>
+            <h3 className="text-lg font-semibold text-gray-900">イベント終了後メッセージ</h3>
           </div>
           <Button
             size="sm"
@@ -878,10 +878,10 @@ L-Applyへようこそ！
             <CardContent className="p-8 text-center">
               <Clock className="h-12 w-12 text-gray-300 mx-auto mb-3" />
               <h4 className="text-base font-medium text-gray-900 mb-1">
-                申込後メッセージを追加
+                イベント終了後メッセージを追加
               </h4>
               <p className="text-sm text-gray-500">
-                申し込んだ人向けのフォローメッセージ
+                イベント終了後に送信されるフォローメッセージ
               </p>
             </CardContent>
           </Card>
@@ -903,7 +903,7 @@ L-Applyへようこそ！
                       </div>
                       <div>
                         <h4 className="font-semibold text-gray-900">ステップ {template.stepNumber}</h4>
-                        <p className="text-xs text-gray-500">申込 {template.delayDays}日後</p>
+                        <p className="text-xs text-gray-500">イベント {template.delayDays}日後</p>
                       </div>
                     </div>
                     <div className="flex items-center space-x-2">
@@ -1047,7 +1047,7 @@ L-Applyへようこそ！
             <DialogDescription>
               {formData.messageType === 'welcome' && '友だち追加時に送信されるメッセージ'}
               {formData.messageType === 'completion' && '申込完了直後に送信されるメッセージ（変数: {plan}, {datetime}, {time}）'}
-              {formData.messageType === 'after-seminar' && '申込後に送信されるメッセージ'}
+              {formData.messageType === 'after-seminar' && '申し込んだイベント終了後に送信されるメッセージ'}
               {formData.messageType === 'general' && 'まだ申し込んでいない人向けのメッセージ'}
             </DialogDescription>
           </DialogHeader>
@@ -1088,7 +1088,7 @@ L-Applyへようこそ！
                 </div>
                 <div>
                   <Label htmlFor="delayDays">
-                    {formData.messageType === 'after-seminar' ? '申込後の日数' : '友だち追加後の日数'}
+                    {formData.messageType === 'after-seminar' ? 'イベント開催後の日数' : '友だち追加後の日数'}
                   </Label>
                   <Input
                     id="delayDays"

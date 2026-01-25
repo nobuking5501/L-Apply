@@ -97,14 +97,25 @@ export async function applicationExists(userId: string, slotAt: Timestamp): Prom
 }
 
 /**
- * Get latest application for user
+ * Get latest application for user (closest upcoming reservation)
+ * Only returns future reservations (slotAt > now)
  */
-export async function getLatestApplication(userId: string): Promise<Application | null> {
-  const snapshot = await getDb()
+export async function getLatestApplication(userId: string, organizationId?: string): Promise<Application | null> {
+  const now = Timestamp.now();
+
+  let query = getDb()
     .collection(APPLICATIONS)
     .where('userId', '==', userId)
     .where('status', '==', 'applied')
-    .orderBy('slotAt', 'desc')
+    .where('slotAt', '>', now); // Only get future reservations
+
+  // Filter by organizationId if provided (multi-tenant support)
+  if (organizationId) {
+    query = query.where('organizationId', '==', organizationId);
+  }
+
+  const snapshot = await query
+    .orderBy('slotAt', 'asc') // Get the closest upcoming reservation
     .limit(1)
     .get();
 
@@ -156,11 +167,39 @@ export async function getPendingReminders(now: Timestamp): Promise<Reminder[]> {
 }
 
 /**
+ * Mark reminder as sending (to prevent race conditions)
+ */
+export async function markReminderAsSending(reminderId: string, sentAt: Timestamp): Promise<void> {
+  await getDb().collection(REMINDERS).doc(reminderId).update({
+    sentAt: sentAt,
+  });
+}
+
+/**
  * Mark reminder as sent
  */
 export async function markReminderAsSent(reminderId: string): Promise<void> {
   await getDb().collection(REMINDERS).doc(reminderId).update({
     sentAt: Timestamp.now(),
+  });
+}
+
+/**
+ * Reset reminder sentAt to null (for retry)
+ */
+export async function resetReminderSentAt(reminderId: string): Promise<void> {
+  await getDb().collection(REMINDERS).doc(reminderId).update({
+    sentAt: null,
+  });
+}
+
+/**
+ * Mark reminder as skipped (due to consent=false)
+ */
+export async function markReminderAsSkipped(reminderId: string): Promise<void> {
+  await getDb().collection(REMINDERS).doc(reminderId).update({
+    sentAt: Timestamp.now(),
+    canceled: true,
   });
 }
 

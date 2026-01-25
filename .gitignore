@@ -57,3 +57,7 @@ setup-commands.sh
 *.swo
 *~
 .vercel
+
+# Google Cloud SDK (large files)
+google-cloud-sdk/
+google-cloud-cli-*.tar.gz

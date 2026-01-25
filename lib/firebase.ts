@@ -22,12 +22,17 @@ let analytics: Analytics | undefined;
 let auth: Auth;
 let db: Firestore;
 
-if (typeof window !== 'undefined' && !getApps().length) {
+if (!getApps().length) {
   app = initializeApp(firebaseConfig);
-  analytics = getAnalytics(app);
+
+  // Only initialize analytics in the browser
+  if (typeof window !== 'undefined') {
+    analytics = getAnalytics(app);
+  }
+
   auth = getAuth(app);
   db = getFirestore(app);
-} else if (getApps().length > 0) {
+} else {
   app = getApps()[0];
   auth = getAuth(app);
   db = getFirestore(app);

@@ -160,7 +160,7 @@ async function handleTextMessage(event: WebhookEvent, organizationId: string): P
       const message = messages.generateConsentUpdateMessage(true);
       await replyMessage(replyToken, [createTextMessage(message)], orgConfig.line.channelAccessToken);
     } else if (text === '予約確認') {
-      const application = await firestore.getLatestApplication(userId);
+      const application = await firestore.getLatestApplication(userId, organizationId);
 
       if (!application) {
         const message = messages.generateNoReservationMessage();
@@ -170,7 +170,7 @@ async function handleTextMessage(event: WebhookEvent, organizationId: string): P
         await replyMessage(replyToken, [createTextMessage(message)], orgConfig.line.channelAccessToken);
       }
     } else if (text === 'キャンセル') {
-      const application = await firestore.getLatestApplication(userId);
+      const application = await firestore.getLatestApplication(userId, organizationId);
 
       if (!application) {
         const message = messages.generateNoReservationMessage();
@@ -184,6 +184,11 @@ async function handleTextMessage(event: WebhookEvent, organizationId: string): P
 
         // Skip step deliveries for this application
         await stepDelivery.skipAllStepDeliveriesForApplication(db, application.id!);
+
+        // Decrement slot capacity if eventId and slotId exist
+        if (application.eventId && application.slotId) {
+          await firestore.decrementSlotCapacity(application.eventId, application.slotId);
+        }
 
         const message = messages.generateCancellationMessage(application.slotAt);
         await replyMessage(replyToken, [createTextMessage(message)], orgConfig.line.channelAccessToken);
