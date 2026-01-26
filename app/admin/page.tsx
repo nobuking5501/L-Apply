@@ -10,8 +10,6 @@ interface AdminStats {
   organizationsByPlan: {
     test: number;
     monitor: number;
-    regular: number;
-    pro: number;
   };
   organizationsByStatus: {
     active: number;
@@ -25,9 +23,7 @@ interface AdminStats {
 
 const PLAN_PRICES: Record<string, number> = {
   test: 0,
-  monitor: 980,
-  regular: 1980,
-  pro: 4980,
+  monitor: 1980,
 };
 
 export default function AdminDashboard() {
@@ -50,8 +46,6 @@ export default function AdminDashboard() {
         organizationsByPlan: {
           test: 0,
           monitor: 0,
-          regular: 0,
-          pro: 0,
         },
         organizationsByStatus: {
           active: 0,
@@ -150,9 +144,9 @@ export default function AdminDashboard() {
       {/* Plan Distribution */}
       <div className="bg-white rounded-lg shadow p-6">
         <h2 className="text-lg font-semibold text-gray-900 mb-4">プラン別組織数</h2>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 gap-4">
           <div className="border border-gray-200 rounded-lg p-4">
-            <div className="text-sm text-gray-500">テストプラン</div>
+            <div className="text-sm text-gray-500">フリープラン</div>
             <div className="mt-1 text-2xl font-bold text-gray-700">
               {stats.organizationsByPlan.test}
             </div>
@@ -163,21 +157,7 @@ export default function AdminDashboard() {
             <div className="mt-1 text-2xl font-bold text-blue-600">
               {stats.organizationsByPlan.monitor}
             </div>
-            <div className="mt-1 text-xs text-gray-500">¥980/月</div>
-          </div>
-          <div className="border border-gray-200 rounded-lg p-4">
-            <div className="text-sm text-gray-500">正規プラン</div>
-            <div className="mt-1 text-2xl font-bold text-green-600">
-              {stats.organizationsByPlan.regular}
-            </div>
             <div className="mt-1 text-xs text-gray-500">¥1,980/月</div>
-          </div>
-          <div className="border border-gray-200 rounded-lg p-4">
-            <div className="text-sm text-gray-500">プロプラン</div>
-            <div className="mt-1 text-2xl font-bold text-purple-600">
-              {stats.organizationsByPlan.pro}
-            </div>
-            <div className="mt-1 text-xs text-gray-500">¥4,980/月</div>
           </div>
         </div>
       </div>

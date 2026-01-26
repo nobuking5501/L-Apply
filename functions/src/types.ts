@@ -6,6 +6,80 @@ export type ReminderType = 'T-24h' | 'day-of' | 'custom';
 
 export type StepDeliveryStatus = 'pending' | 'sending' | 'sent' | 'skipped';
 
+export type PlanType = 'test' | 'monitor' | 'regular' | 'pro' | 'unlimited';
+
+export type SubscriptionStatus = 'active' | 'trial' | 'canceled' | 'past_due';
+
+export interface OrganizationSubscription {
+  plan: PlanType;
+  status: SubscriptionStatus;
+  limits: {
+    maxEvents: number;
+    maxStepDeliveries: number;
+    maxReminders: number;
+    maxApplicationsPerMonth: number;
+  };
+  trialEndsAt: Timestamp | null;
+  currentPeriodStart: Timestamp;
+  currentPeriodEnd: Timestamp;
+}
+
+export interface OrganizationUsage {
+  eventsCount: number;
+  stepDeliveriesCount: number;
+  remindersCount: number;
+  applicationsThisMonth: number;
+  lastResetAt: Timestamp;
+}
+
+export interface OrganizationAddon {
+  purchased: boolean;
+  purchasedAt?: Timestamp;
+  stripePaymentIntentId?: string;
+  amountPaid?: number;
+  manuallyEnabled?: boolean;
+  enabledBy?: string;
+  enabledAt?: Timestamp;
+}
+
+export interface Organization {
+  id: string;
+  name?: string;
+  email?: string;
+
+  // Owner information
+  ownerId?: string;
+  ownerName?: string;
+  ownerEmail?: string;
+
+  // LINE Integration
+  lineChannelId?: string;
+  lineChannelSecret?: string;
+  lineChannelAccessToken?: string;
+  liffId?: string;
+  lineDisplayName?: string;
+  lineUserId?: string;
+
+  // Subscription & Usage
+  subscription: OrganizationSubscription;
+  usage: OrganizationUsage;
+
+  // Add-ons
+  addons?: Record<string, OrganizationAddon>;
+
+  // Account management
+  disabled?: boolean;
+
+  // Branding (optional)
+  logoUrl?: string;
+  primaryColor?: string;
+  companyName?: string;
+
+  // Metadata
+  createdAt: Timestamp;
+  updatedAt?: Timestamp;
+}
+
 export interface LineUser {
   userId: string;
   displayName: string;

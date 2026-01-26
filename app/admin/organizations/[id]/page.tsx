@@ -19,7 +19,7 @@ interface Organization {
   lineDisplayName?: string;
   lineUserId?: string;
   subscription: {
-    plan: 'test' | 'monitor' | 'regular' | 'pro' | 'unlimited';
+    plan: 'test' | 'monitor';
     status: 'active' | 'trial' | 'canceled' | 'past_due';
     limits: {
       maxEvents: number;
@@ -38,6 +38,17 @@ interface Organization {
     applicationsThisMonth: number;
     lastResetAt: any;
   };
+  addons?: {
+    [key: string]: {
+      purchased: boolean;
+      purchasedAt?: any;
+      stripePaymentIntentId?: string;
+      amountPaid?: number;
+      manuallyEnabled?: boolean;
+      enabledBy?: string;
+      enabledAt?: any;
+    };
+  };
   createdAt: any;
   updatedAt: any;
 }
@@ -55,35 +66,14 @@ function getPlanLimits(plan: string) {
       return {
         maxEvents: 10,
         maxStepDeliveries: 3,
-        maxReminders: 5,
-        maxApplicationsPerMonth: 100,
-      };
-    case 'regular':
-      return {
-        maxEvents: 10,
-        maxStepDeliveries: 3,
         maxReminders: 10,
         maxApplicationsPerMonth: 300,
       };
-    case 'pro':
-      return {
-        maxEvents: 50,
-        maxStepDeliveries: 10,
-        maxReminders: 50,
-        maxApplicationsPerMonth: 1000,
-      };
-    case 'unlimited':
-      return {
-        maxEvents: 999999,
-        maxStepDeliveries: 999999,
-        maxReminders: 999999,
-        maxApplicationsPerMonth: 999999,
-      };
     default:
       return {
-        maxEvents: 3,
-        maxStepDeliveries: 3,
-        maxReminders: 3,
+        maxEvents: 1,
+        maxStepDeliveries: 0,
+        maxReminders: 0,
         maxApplicationsPerMonth: 10,
       };
   }
@@ -238,6 +228,53 @@ export default function OrganizationDetailPage({ params }: { params: { id: strin
       alert(`アカウントを${action}しました`);
     } catch (err) {
       alert(`アカウントの${action}に失敗しました`);
+      console.error(err);
+    } finally {
+      setUpdating(false);
+    }
+  };
+
+  const toggleAddon = async (addonId: string) => {
+    if (!organization) return;
+
+    const currentState = organization.addons?.[addonId];
+    const isEnabled = currentState?.purchased || currentState?.manuallyEnabled;
+    const action = isEnabled ? '無効化' : '有効化';
+
+    if (!confirm(`サポートサービスを${action}しますか？`)) {
+      return;
+    }
+
+    try {
+      setUpdating(true);
+      const docRef = doc(db, 'organizations', params.id);
+
+      if (isEnabled) {
+        // 無効化
+        await updateDoc(docRef, {
+          [`addons.${addonId}`]: {
+            purchased: false,
+            manuallyEnabled: false,
+          },
+          updatedAt: Timestamp.now(),
+        });
+      } else {
+        // 有効化
+        await updateDoc(docRef, {
+          [`addons.${addonId}`]: {
+            purchased: false,
+            manuallyEnabled: true,
+            enabledBy: 'admin',
+            enabledAt: Timestamp.now(),
+          },
+          updatedAt: Timestamp.now(),
+        });
+      }
+
+      await fetchOrganization();
+      alert(`サポートサービスを${action}しました`);
+    } catch (err) {
+      alert(`サポートサービスの${action}に失敗しました`);
       console.error(err);
     } finally {
       setUpdating(false);
@@ -420,35 +457,14 @@ export default function OrganizationDetailPage({ params }: { params: { id: strin
                 disabled={updating || organization.subscription.plan === 'test'}
                 className="px-3 py-1 text-sm bg-gray-100 text-gray-700 rounded hover:bg-gray-200 disabled:opacity-50"
               >
-                フリー
+                フリー (¥0/月)
               </button>
               <button
                 onClick={() => updatePlan('monitor')}
                 disabled={updating || organization.subscription.plan === 'monitor'}
                 className="px-3 py-1 text-sm bg-blue-100 text-blue-700 rounded hover:bg-blue-200 disabled:opacity-50"
               >
-                モニター
-              </button>
-              <button
-                onClick={() => updatePlan('regular')}
-                disabled={updating || organization.subscription.plan === 'regular'}
-                className="px-3 py-1 text-sm bg-green-100 text-green-700 rounded hover:bg-green-200 disabled:opacity-50"
-              >
-                正規
-              </button>
-              <button
-                onClick={() => updatePlan('pro')}
-                disabled={updating || organization.subscription.plan === 'pro'}
-                className="px-3 py-1 text-sm bg-purple-100 text-purple-700 rounded hover:bg-purple-200 disabled:opacity-50"
-              >
-                プロ
-              </button>
-              <button
-                onClick={() => updatePlan('unlimited')}
-                disabled={updating || organization.subscription.plan === 'unlimited'}
-                className="px-3 py-1 text-sm bg-yellow-100 text-yellow-800 rounded hover:bg-yellow-200 disabled:opacity-50 font-bold"
-              >
-                無制限
+                モニター (¥1,980/月)
               </button>
             </div>
           </div>
@@ -580,6 +596,84 @@ export default function OrganizationDetailPage({ params }: { params: { id: strin
                 {organization.usage.applicationsThisMonth} /{' '}
                 {organization.subscription.limits.maxApplicationsPerMonth}
               </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Add-ons Management */}
+      <div className="bg-white rounded-lg shadow p-6">
+        <h2 className="text-lg font-semibold text-gray-900 mb-4">アドオン管理</h2>
+        <div className="space-y-4">
+          {/* Support Service Addon */}
+          <div className="border border-gray-200 rounded-lg p-4">
+            <div className="flex items-center justify-between">
+              <div className="flex-1">
+                <div className="flex items-center space-x-3 mb-2">
+                  <h3 className="text-base font-medium text-gray-900">サポートサービス</h3>
+                  {(() => {
+                    const supportAddon = organization.addons?.['support'];
+                    const isPurchased = supportAddon?.purchased === true;
+                    const isManuallyEnabled = supportAddon?.manuallyEnabled === true;
+                    const isEnabled = isPurchased || isManuallyEnabled;
+
+                    return (
+                      <>
+                        {isEnabled && (
+                          <span className="px-2 py-1 bg-green-100 text-green-800 text-xs font-medium rounded">
+                            有効
+                          </span>
+                        )}
+                        {!isEnabled && (
+                          <span className="px-2 py-1 bg-gray-100 text-gray-700 text-xs font-medium rounded">
+                            無効
+                          </span>
+                        )}
+                      </>
+                    );
+                  })()}
+                </div>
+                <p className="text-sm text-gray-600">
+                  初回設定サポート - LINE連携の設定、基本的な使い方のレクチャーなど
+                </p>
+                {organization.addons?.['support'] && (
+                  <div className="mt-2 space-y-1">
+                    {organization.addons['support'].purchased && (
+                      <p className="text-xs text-gray-500">
+                        💳 購入済み (¥{organization.addons['support'].amountPaid?.toLocaleString() || '15,000'})
+                        {organization.addons['support'].purchasedAt && (
+                          <span className="ml-2">
+                            {new Date(organization.addons['support'].purchasedAt.seconds * 1000).toLocaleDateString('ja-JP')}
+                          </span>
+                        )}
+                      </p>
+                    )}
+                    {organization.addons['support'].manuallyEnabled && (
+                      <p className="text-xs text-gray-500">
+                        🛠️ 管理者による手動有効化
+                        {organization.addons['support'].enabledAt && (
+                          <span className="ml-2">
+                            {new Date(organization.addons['support'].enabledAt.seconds * 1000).toLocaleDateString('ja-JP')}
+                          </span>
+                        )}
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
+              <button
+                onClick={() => toggleAddon('support')}
+                disabled={updating}
+                className={`ml-4 px-4 py-2 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+                  organization.addons?.['support']?.purchased || organization.addons?.['support']?.manuallyEnabled
+                    ? 'bg-red-100 text-red-700 hover:bg-red-200'
+                    : 'bg-green-100 text-green-700 hover:bg-green-200'
+                }`}
+              >
+                {organization.addons?.['support']?.purchased || organization.addons?.['support']?.manuallyEnabled
+                  ? '無効化'
+                  : '有効化'}
+              </button>
             </div>
           </div>
         </div>

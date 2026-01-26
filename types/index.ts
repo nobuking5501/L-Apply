@@ -1,25 +1,82 @@
 // Multi-tenant type definitions
 
-export type PlanType = 'free' | 'standard' | 'premium';
+// Plan types - matches actual Firestore implementation
+export type PlanType = 'test' | 'monitor' | 'regular' | 'pro' | 'unlimited';
+export type SubscriptionStatus = 'active' | 'trial' | 'canceled' | 'past_due';
 export type UserRole = 'admin' | 'owner' | 'member';
 export type StepDeliveryStatus = 'pending' | 'sending' | 'sent' | 'skipped';
 
+export interface OrganizationSubscription {
+  plan: PlanType;
+  status: SubscriptionStatus;
+  limits: {
+    maxEvents: number;
+    maxStepDeliveries: number;
+    maxReminders: number;
+    maxApplicationsPerMonth: number;
+  };
+  trialEndsAt: any | null;
+  currentPeriodStart: any;
+  currentPeriodEnd: any;
+}
+
+export interface OrganizationUsage {
+  eventsCount: number;
+  stepDeliveriesCount: number;
+  remindersCount: number;
+  applicationsThisMonth: number;
+  lastResetAt: any;
+}
+
+export interface OrganizationAddon {
+  purchased: boolean;
+  purchasedAt?: any;
+  stripePaymentIntentId?: string;
+  amountPaid?: number;
+  manuallyEnabled?: boolean;
+  enabledBy?: string;
+  enabledAt?: any;
+}
+
 export interface Organization {
   id: string;
-  name: string;
-  plan: PlanType;
-  ownerId: string;
-  createdAt: any;
-  updatedAt?: any;
-  // LINE Integration (flat structure)
+  name?: string;
+  email?: string;
+
+  // Owner information (for admin dashboard)
+  ownerId?: string;
+  ownerName?: string;
+  ownerEmail?: string;
+
+  // LINE Integration
   lineChannelId?: string;
   lineChannelSecret?: string;
   lineChannelAccessToken?: string;
   liffId?: string;
-  // Branding
+  lineDisplayName?: string;
+  lineUserId?: string;
+
+  // Subscription & Usage (actual structure used in Firestore)
+  subscription: OrganizationSubscription;
+  usage: OrganizationUsage;
+
+  // Add-ons
+  addons?: Record<string, OrganizationAddon>;
+
+  // Account management
+  disabled?: boolean;
+
+  // Branding (legacy, may still be used)
   logoUrl?: string;
   primaryColor?: string;
   companyName?: string;
+
+  // Metadata
+  createdAt: any;
+  updatedAt?: any;
+
+  // Legacy plan field (deprecated - use subscription.plan instead)
+  plan?: PlanType;
 }
 
 export interface User {

@@ -18,7 +18,7 @@ async function checkApplicationsStructure() {
 
     console.log(`✅ ${snapshot.size}件の申込を確認\n`);
 
-    snapshot.forEach((doc, index) => {
+    snapshot.docs.forEach((doc, index) => {
       const data = doc.data();
       console.log(`申込 #${index + 1}:`);
       console.log(`  - ID: ${doc.id}`);

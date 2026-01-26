@@ -2,7 +2,7 @@ import { Timestamp } from 'firebase-admin/firestore';
 import { getAdminDb } from './firebase-admin';
 
 // Subscription plan types
-export type SubscriptionPlan = 'test' | 'monitor' | 'regular' | 'pro';
+export type SubscriptionPlan = 'test' | 'monitor';
 export type SubscriptionStatus = 'active' | 'trial' | 'canceled' | 'past_due';
 
 // Organization subscription interface
@@ -49,8 +49,6 @@ export interface AdminStats {
   organizationsByPlan: {
     test: number;
     monitor: number;
-    regular: number;
-    pro: number;
   };
   organizationsByStatus: {
     active: number;
@@ -190,8 +188,6 @@ export async function getAdminStats(): Promise<AdminStats> {
     organizationsByPlan: {
       test: 0,
       monitor: 0,
-      regular: 0,
-      pro: 0,
     },
     organizationsByStatus: {
       active: 0,
@@ -269,28 +265,14 @@ function getPlanLimits(plan: SubscriptionPlan) {
       return {
         maxEvents: 10,
         maxStepDeliveries: 3,
-        maxReminders: 5,
-        maxApplicationsPerMonth: 100,
-      };
-    case 'regular':
-      return {
-        maxEvents: 10,
-        maxStepDeliveries: 3,
         maxReminders: 10,
         maxApplicationsPerMonth: 300,
       };
-    case 'pro':
-      return {
-        maxEvents: 50,
-        maxStepDeliveries: 10,
-        maxReminders: 50,
-        maxApplicationsPerMonth: 1000,
-      };
     default:
       return {
-        maxEvents: 3,
-        maxStepDeliveries: 3,
-        maxReminders: 3,
+        maxEvents: 1,
+        maxStepDeliveries: 0,
+        maxReminders: 0,
         maxApplicationsPerMonth: 10,
       };
   }
@@ -304,11 +286,7 @@ function getPlanPrice(plan: SubscriptionPlan): number {
     case 'test':
       return 0;
     case 'monitor':
-      return 980;
-    case 'regular':
       return 1980;
-    case 'pro':
-      return 4980;
     default:
       return 0;
   }
