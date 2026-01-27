@@ -36,6 +36,14 @@ service cloud.firestore {
       allow read, write: if false; // No client-side access
     }
 
+    // Subscriptions - 自分の組織のsubscriptionを作成・読み書き可能
+    match /subscriptions/{orgId} {
+      allow read: if isSameOrganization(orgId) || isAdmin();
+      allow create: if isSignedIn() && orgId == 'org_' + request.auth.uid;
+      allow update: if isSameOrganization(orgId) || isAdmin();
+      allow delete: if false;
+    }
+
     // Users - 自分のドキュメントのみ作成・読み書き可能
     match /users/{userId} {
       allow read: if isSignedIn(); // 管理画面用に他ユーザーも読めるように変更
