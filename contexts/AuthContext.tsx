@@ -181,16 +181,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       });
       console.log('✅ Organization document created:', orgId);
 
-      // Create organization_secrets document (empty by default, to be configured in settings)
-      console.log('📝 Creating organization_secrets document...');
-      const secretsDocRef = doc(db, 'organization_secrets', orgId);
-      await setDoc(secretsDocRef, {
-        lineChannelAccessToken: '',
-        lineChannelSecret: '',
-        createdAt: now,
-        updatedAt: now,
-      });
-      console.log('✅ Organization secrets document created:', orgId);
+      // NOTE: organization_secrets is created via API when LINE credentials are configured in settings
+      // It cannot be created here due to Firestore security rules (server-side only access)
 
       // Create subscriptions document
       console.log('📝 Creating subscriptions document...');
