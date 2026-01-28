@@ -1,5 +1,27 @@
-functions
-.firebase
+# Google Cloud SDK (30k+ files)
+google-cloud-sdk/
+google-cloud-cli-linux-x86_64.tar.gz
+
+# Node modules
+node_modules/
+functions/node_modules/
+
+# Build artifacts
+scripts/build/
+.next/
+
+# Git
+.git/
+
+# Environment files
+.env.local
+
+# Firebase
 firebase-debug.log
-firebase-debug.*.log
-.github
+firestore-debug.log
+ui-debug.log
+*.log
+
+# Misc
+.DS_Store
+.vscode/
