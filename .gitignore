@@ -61,3 +61,7 @@ setup-commands.sh
 # Google Cloud SDK (large files)
 google-cloud-sdk/
 google-cloud-cli-*.tar.gz
+
+# Google Cloud SDK
+google-cloud-sdk/
+google-cloud-cli-*.tar.gz
