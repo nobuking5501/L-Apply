@@ -33,28 +33,31 @@ async function verifySignatureAndGetOrganization(
   ensureFirebaseInitialized();
   const db = firestore.getDb();
 
-  // Get all organizations
-  const orgsSnapshot = await db.collection('organizations').get();
+  // Get all organizations and organization_secrets in parallel for speed
+  const [orgsSnapshot, secretsSnapshot] = await Promise.all([
+    db.collection('organizations').get(),
+    db.collection('organization_secrets').get(),
+  ]);
+
+  // Build a map of organization secrets for quick lookup
+  const secretsMap = new Map<string, any>();
+  secretsSnapshot.docs.forEach(doc => {
+    secretsMap.set(doc.id, doc.data());
+  });
 
   // Try to verify signature with each organization's channelSecret
   for (const orgDoc of orgsSnapshot.docs) {
     const orgId = orgDoc.id;
     const orgData = orgDoc.data();
 
-    // Try to get channelSecret from organization_secrets first (new method)
+    // Try organization_secrets first (new method)
     let channelSecret = '';
-
-    try {
-      const secretsDoc = await db.collection('organization_secrets').doc(orgId).get();
-      if (secretsDoc.exists) {
-        const secretsData = secretsDoc.data();
-        channelSecret = secretsData?.lineChannelSecret || '';
-      }
-    } catch (error) {
-      console.warn(`Failed to fetch organization_secrets for ${orgId}`, error);
+    const secretsData = secretsMap.get(orgId);
+    if (secretsData?.lineChannelSecret) {
+      channelSecret = secretsData.lineChannelSecret;
     }
 
-    // Fallback to old structure (backward compatibility)
+    // Fallback to organizations collection (old method)
     if (!channelSecret) {
       const settings = orgData.settings || {};
       const branding = settings.branding || {};
