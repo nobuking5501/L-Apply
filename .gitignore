@@ -34,6 +34,11 @@ yarn-error.log*
 .env.production.local
 .runtimeconfig.json
 
+# Functions environment files (may contain secrets)
+functions/.env
+functions/.env.yaml
+functions/.env.*.local
+
 # Firebase
 .firebase/
 firebase-debug.log
@@ -65,3 +70,9 @@ google-cloud-cli-*.tar.gz
 # Google Cloud SDK
 google-cloud-sdk/
 google-cloud-cli-*.tar.gz
+
+# Temporary deployment files
+deploy-ready/
+
+# Screenshots
+*.png
