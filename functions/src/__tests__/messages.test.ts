@@ -35,6 +35,14 @@ describe('Message utilities', () => {
 
       expect(message).toContain('お申し込みありがとうございます');
       expect(message).toContain('ベーシックプラン');
+      expect(message).toContain('リマインダーをお送りします');
+    });
+
+    it('should use custom template when provided', () => {
+      const template = 'お申し込みありがとうございます！{plan} {datetime} 詳細: https://test-app.web.app';
+      const message = generateCompletionMessage('ベーシックプラン', testTimestamp, template);
+
+      expect(message).toContain('ベーシックプラン');
       expect(message).toContain('https://test-app.web.app');
     });
   });

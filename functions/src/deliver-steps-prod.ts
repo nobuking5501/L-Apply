@@ -37,6 +37,17 @@ export const deliverSteps = onRequest(
           // by another scheduled run before it's marked as sent
           await stepDelivery.markStepDeliveryAsSending(db, delivery.id!);
 
+          // Check if application is canceled
+          const application = await firestore.getApplication(delivery.applicationId);
+
+          if (!application || application.status === 'canceled') {
+            console.log(
+              `Skipping step delivery ${delivery.id} - application is canceled`
+            );
+            await stepDelivery.markStepDeliveryAsSkipped(db, delivery.id!);
+            continue;
+          }
+
           // Check user consent
           const user = await firestore.getLineUser(delivery.userId);
 
@@ -70,6 +81,17 @@ export const deliverSteps = onRequest(
             console.error(`Step delivery ${delivery.id} cannot be sent. Resetting to pending for retry.`);
             // Reset to pending so it can be retried
             await stepDelivery.markStepDeliveryAsPending(db, delivery.id!);
+            continue;
+          }
+
+          // Check if step delivery feature is still enabled for this organization
+          const orgDoc = await db.collection('organizations').doc(delivery.organizationId).get();
+          const orgData = orgDoc.data();
+          const stepDeliveryEnabled = orgData?.features?.stepDeliveryEnabled === true;
+
+          if (!stepDeliveryEnabled) {
+            console.log(`Skipping step delivery ${delivery.id} - step delivery is disabled for organization ${delivery.organizationId}`);
+            await stepDelivery.markStepDeliveryAsSkipped(db, delivery.id!);
             continue;
           }
 

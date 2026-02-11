@@ -80,6 +80,8 @@ async function verifySignatureAndGetOrganization(
 export const webhook = onRequest(
   {
     region: 'asia-northeast1',
+    timeoutSeconds: 60,
+    memory: '512MiB',
   },
   async (req, res) => {
     // Only allow POST
@@ -236,21 +238,32 @@ async function handleFollowEvent(event: WebhookEvent, organizationId: string): P
     // Save user to Firestore
     await firestore.upsertLineUser(userId, profile.displayName, true, organizationId);
 
-    // Get welcome message template from Firestore
-    const welcomeMessage = await firestore.getWelcomeMessageTemplate(organizationId);
+    // Check if welcome message feature is enabled for this organization
+    const db = firestore.getDb();
+    const orgDoc = await db.collection('organizations').doc(organizationId).get();
+    const orgData = orgDoc.data();
+    const welcomeMessageEnabled = orgData?.features?.welcomeMessageEnabled === true;
 
-    if (welcomeMessage) {
-      // Add LIFF app link to the message
-      const liffUrl = `https://liff.line.me/${orgConfig.liff.id}`;
-      const messageWithLink = `${welcomeMessage}\n\n【セミナー申込はこちら】\n${liffUrl}`;
+    // IMPORTANT: Only send welcome message if explicitly enabled at organization level
+    if (welcomeMessageEnabled) {
+      console.log(`Welcome message is enabled for organization: ${organizationId}`);
 
-      // Send welcome message
-      await pushMessage(userId, [createTextMessage(messageWithLink)], orgConfig.line.channelAccessToken);
+      // Get welcome message template from Firestore
+      const welcomeMessage = await firestore.getWelcomeMessageTemplate(organizationId);
+
+      if (welcomeMessage) {
+        // Add LIFF app link to the message
+        const liffUrl = `https://liff.line.me/${orgConfig.liff.id}`;
+        const messageWithLink = `${welcomeMessage}\n\n【セミナー申込はこちら】\n${liffUrl}`;
+
+        // Send welcome message
+        await pushMessage(userId, [createTextMessage(messageWithLink)], orgConfig.line.channelAccessToken);
+        console.log(`Sent welcome message to user ${userId} for organization ${organizationId}`);
+      } else {
+        console.log(`Welcome message is enabled but no template configured for organization: ${organizationId}`);
+      }
     } else {
-      // Fallback welcome message if no template is configured
-      const liffUrl = `https://liff.line.me/${orgConfig.liff.id}`;
-      const defaultMessage = `友だち追加ありがとうございます！\n\nセミナーのお申込みは下記のリンクからどうぞ。\n${liffUrl}`;
-      await pushMessage(userId, [createTextMessage(defaultMessage)], orgConfig.line.channelAccessToken);
+      console.log(`Welcome message is disabled for organization: ${organizationId}. Skipping welcome message.`);
     }
   } catch (error) {
     console.error('Error handling follow event:', error);

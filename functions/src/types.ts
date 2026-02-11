@@ -67,6 +67,13 @@ export interface Organization {
   // Add-ons
   addons?: Record<string, OrganizationAddon>;
 
+  // Feature flags (explicit opt-in for automated features)
+  features?: {
+    stepDeliveryEnabled?: boolean;   // Default: false - must be explicitly enabled
+    reminderEnabled?: boolean;        // Default: true for backward compatibility
+    welcomeMessageEnabled?: boolean;  // Default: false - must be explicitly enabled
+  };
+
   // Account management
   disabled?: boolean;
 

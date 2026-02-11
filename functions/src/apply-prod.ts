@@ -7,7 +7,7 @@ import * as timezone from './utils/timezone';
 import * as messages from './utils/messages';
 import * as stepDelivery from './utils/step-delivery';
 import { getOrganizationConfig } from './config';
-import { ReminderType } from './types';
+import { ReminderType, StepDelivery } from './types';
 import { getReminderTemplates, calculateReminderTime } from './utils/reminder-helper';
 import {
   canAcceptApplication,
@@ -36,6 +36,83 @@ export const apply = onRequest(
     region: 'asia-northeast1',
   },
   async (req, res) => {
+    // === 一時的な確認機能（ステップ配信チェック用） ===
+    if (req.query.checkPending === 'true') {
+      ensureFirebaseInitialized();
+      const db = firestore.getDb();
+      const dryRun = req.query.dryRun !== 'false';
+
+      console.log('🔍 Pending状態のステップ配信を確認');
+
+      const snapshot = await db
+        .collection('step_deliveries')
+        .where('status', '==', 'pending')
+        .get();
+
+      if (snapshot.size === 0) {
+        res.status(200).json({
+          success: true,
+          message: 'Pending状態のステップ配信は見つかりませんでした。',
+          count: 0,
+        });
+        return;
+      }
+
+      const byOrganization: Record<string, any[]> = {};
+
+      for (const doc of snapshot.docs) {
+        const data = doc.data();
+        const orgId = data.organizationId || 'unknown';
+
+        if (!byOrganization[orgId]) {
+          byOrganization[orgId] = [];
+        }
+
+        byOrganization[orgId].push({
+          id: doc.id,
+          stepNumber: data.stepNumber,
+          scheduledAt: data.scheduledAt?.toDate(),
+        });
+      }
+
+      const summary = Object.entries(byOrganization).map(([orgId, deliveries]) => ({
+        organizationId: orgId,
+        count: deliveries.length,
+      }));
+
+      if (!dryRun) {
+        const batchSize = 500;
+        const docs = snapshot.docs;
+
+        for (let i = 0; i < docs.length; i += batchSize) {
+          const batch = db.batch();
+          const batchDocs = docs.slice(i, i + batchSize);
+
+          batchDocs.forEach(doc => {
+            batch.update(doc.ref, { status: 'skipped' });
+          });
+
+          await batch.commit();
+        }
+
+        res.status(200).json({
+          success: true,
+          message: `${snapshot.size}件のPending配信をスキップしました。`,
+          totalSkipped: snapshot.size,
+          byOrganization: summary,
+        });
+      } else {
+        res.status(200).json({
+          success: true,
+          message: '確認のみモード。実行するには ?dryRun=false を付けてください。',
+          totalPending: snapshot.size,
+          byOrganization: summary,
+        });
+      }
+      return;
+    }
+    // === 一時的な確認機能ここまで ===
+
     // Only allow POST
     if (req.method !== 'POST') {
       res.status(405).json({ error: 'Method not allowed' });
@@ -163,154 +240,178 @@ export const apply = onRequest(
         console.warn('Failed to increment application count:', error);
       }
 
-      // Create reminders if consent is true
-      if (user.consent) {
+      // Get organization document once for all feature flags
+      const db = firestore.getDb();
+      const orgDoc = await db.collection('organizations').doc(orgConfig.organizationId).get();
+      const orgData = orgDoc.data();
+
+      // Check feature flags
+      // Default to true for backward compatibility (existing organizations should continue working)
+      const reminderEnabled = orgData?.features?.reminderEnabled !== false;
+      const stepDeliveryEnabled = orgData?.features?.stepDeliveryEnabled === true;
+
+      // Create reminders if consent is true AND reminder is enabled
+      if (user.consent && reminderEnabled) {
+        console.log(`Reminder is enabled for organization: ${orgConfig.organizationId}`);
+
         // Get reminder templates from Firestore
-        const db = firestore.getDb();
         const reminderTemplates = await getReminderTemplates(db, orgConfig.organizationId);
 
         // Determine which reminders to create
         let remindersToCreate: Array<{
-          type: ReminderType;
-          scheduledAt: Timestamp;
-          message: string;
-        }> = [];
+            type: ReminderType;
+            scheduledAt: Timestamp;
+            message: string;
+          }> = [];
 
-        if (reminderTemplates.length > 0) {
-          // Use custom templates
-          console.log(`Creating ${reminderTemplates.length} custom reminders for organization: ${orgConfig.organizationId}`);
+          if (reminderTemplates.length > 0) {
+            // Use custom templates
+            console.log(`Creating ${reminderTemplates.length} custom reminders for organization: ${orgConfig.organizationId}`);
 
-          remindersToCreate = reminderTemplates.map((template) => {
-            const scheduledAt = calculateReminderTime(
-              slotAt,
-              template.delayDays,
-              template.timeOfDay
-            );
+            remindersToCreate = reminderTemplates.map((template) => {
+              const scheduledAt = calculateReminderTime(
+                slotAt,
+                template.delayDays,
+                template.timeOfDay
+              );
 
-            // Replace variables in message
-            const message = template.message
-              .replace(/\{plan\}/g, body.plan)
-              .replace(/\{time\}/g, timezone.formatTimeOnly(slotAt))
-              .replace(/\{datetime\}/g, timezone.formatDateTimeWithDayOfWeek(slotAt));
+              // Replace variables in message
+              const message = template.message
+                .replace(/\{plan\}/g, body.plan)
+                .replace(/\{time\}/g, timezone.formatTimeOnly(slotAt))
+                .replace(/\{datetime\}/g, timezone.formatDateTimeWithDayOfWeek(slotAt));
 
-            return {
-              type: template.reminderType as ReminderType,
-              scheduledAt,
-              message,
-            };
-          });
-        } else {
-          // Fallback to default reminders (backward compatibility)
-          console.log(`Using default reminders for organization: ${orgConfig.organizationId}`);
-
-          const t24hTime = timezone.calculateT24hReminder(slotAt);
-          const dayOfTime = timezone.calculateDayOfReminder(slotAt);
-
-          remindersToCreate = [
-            {
-              type: 'T-24h',
-              scheduledAt: t24hTime,
-              message: messages.generateT24hReminderMessage(body.plan, slotAt),
-            },
-            {
-              type: 'day-of',
-              scheduledAt: dayOfTime,
-              message: messages.generateDayOfReminderMessage(body.plan, slotAt),
-            },
-          ];
-        }
-
-        // Check subscription limits
-        let canCreateReminders = true;
-        try {
-          for (let i = 0; i < remindersToCreate.length; i++) {
-            const canCreate = await canCreateReminder(orgConfig.organizationId);
-            if (!canCreate) {
-              console.warn(`Reminder limit reached for organization: ${orgConfig.organizationId}. Created ${i}/${remindersToCreate.length} reminders.`);
-              remindersToCreate = remindersToCreate.slice(0, i);
-              break;
-            }
-          }
-        } catch (error) {
-          console.warn('Reminder limit check failed, skipping reminders:', error);
-          canCreateReminders = false;
-        }
-
-        // Create reminders
-        if (canCreateReminders && remindersToCreate.length > 0) {
-          for (const reminder of remindersToCreate) {
-            await firestore.createReminder({
-              applicationId,
-              userId,
-              scheduledAt: reminder.scheduledAt,
-              type: reminder.type,
-              sentAt: null,
-              canceled: false,
-              message: reminder.message,
-              organizationId: orgConfig.organizationId,
+              return {
+                type: template.reminderType as ReminderType,
+                scheduledAt,
+                message,
+              };
             });
+          } else {
+            // Fallback to default reminders (backward compatibility)
+            console.log(`Using default reminders for organization: ${orgConfig.organizationId}`);
+
+            const t24hTime = timezone.calculateT24hReminder(slotAt);
+            const dayOfTime = timezone.calculateDayOfReminder(slotAt);
+
+            remindersToCreate = [
+              {
+                type: 'T-24h',
+                scheduledAt: t24hTime,
+                message: messages.generateT24hReminderMessage(body.plan, slotAt),
+              },
+              {
+                type: 'day-of',
+                scheduledAt: dayOfTime,
+                message: messages.generateDayOfReminderMessage(body.plan, slotAt),
+              },
+            ];
           }
 
-          // Increment reminder count
+          // Check subscription limits
+          let canCreateReminders = true;
           try {
             for (let i = 0; i < remindersToCreate.length; i++) {
-              await incrementReminderCount(orgConfig.organizationId);
+              const canCreate = await canCreateReminder(orgConfig.organizationId);
+              if (!canCreate) {
+                console.warn(`Reminder limit reached for organization: ${orgConfig.organizationId}. Created ${i}/${remindersToCreate.length} reminders.`);
+                remindersToCreate = remindersToCreate.slice(0, i);
+                break;
+              }
             }
           } catch (error) {
-            console.warn('Failed to increment reminder count:', error);
+            console.warn('Reminder limit check failed, skipping reminders:', error);
+            canCreateReminders = false;
           }
 
-          console.log(`Created ${remindersToCreate.length} reminders for application: ${applicationId}`);
-        }
+          // Create reminders
+          if (canCreateReminders && remindersToCreate.length > 0) {
+            for (const reminder of remindersToCreate) {
+              await firestore.createReminder({
+                applicationId,
+                userId,
+                scheduledAt: reminder.scheduledAt,
+                type: reminder.type,
+                sentAt: null,
+                canceled: false,
+                message: reminder.message,
+                organizationId: orgConfig.organizationId,
+              });
+            }
+
+            // Increment reminder count
+            try {
+              for (let i = 0; i < remindersToCreate.length; i++) {
+                await incrementReminderCount(orgConfig.organizationId);
+              }
+            } catch (error) {
+              console.warn('Failed to increment reminder count:', error);
+            }
+
+            console.log(`Created ${remindersToCreate.length} reminders for application: ${applicationId}`);
+          }
       }
 
       // Create step delivery schedule (after seminar date)
-      const db = firestore.getDb();
-      const stepDeliveries = await stepDelivery.createStepDeliverySchedule(
-        db,
-        applicationId,
-        userId,
-        slotAt,
-        orgConfig.organizationId,
-        body.plan
-      );
+      // IMPORTANT: Only create if explicitly enabled at organization level
+      // Note: stepDeliveryEnabled is already checked above (line 251)
 
-      // Check subscription limits for step deliveries
-      let allowedStepDeliveriesCount = stepDeliveries.length;
-      try {
-        // Check how many step deliveries we can create
-        allowedStepDeliveriesCount = 0;
-        for (let i = 0; i < stepDeliveries.length; i++) {
-          const canCreate = await canCreateStepDelivery(orgConfig.organizationId);
-          if (!canCreate) {
-            console.warn(`Step delivery limit reached for organization: ${orgConfig.organizationId}. Created ${allowedStepDeliveriesCount}/${stepDeliveries.length} step deliveries.`);
-            break;
-          }
-          allowedStepDeliveriesCount++;
-        }
-      } catch (error) {
-        console.warn('Step delivery limit check failed, creating all step deliveries:', error);
-      }
+      let stepDeliveries: Omit<StepDelivery, 'id'>[] = [];
+      let allowedStepDeliveriesCount = 0;
 
-      // Save step deliveries to Firestore (only allowed count)
-      const batch = db.batch();
+      if (stepDeliveryEnabled) {
+        console.log(`Step delivery is enabled for organization: ${orgConfig.organizationId}`);
 
-      for (let i = 0; i < allowedStepDeliveriesCount; i++) {
-        const docRef = db.collection('step_deliveries').doc();
-        batch.set(docRef, stepDeliveries[i]);
-      }
+        stepDeliveries = await stepDelivery.createStepDeliverySchedule(
+          db,
+          applicationId,
+          userId,
+          slotAt,
+          orgConfig.organizationId,
+          body.plan
+        );
 
-      await batch.commit();
-
-      // Increment step delivery count for subscription tracking
-      if (allowedStepDeliveriesCount > 0) {
+        // Check subscription limits for step deliveries
+        allowedStepDeliveriesCount = stepDeliveries.length;
         try {
-          for (let i = 0; i < allowedStepDeliveriesCount; i++) {
-            await incrementStepDeliveryCount(orgConfig.organizationId);
+          // Check how many step deliveries we can create
+          allowedStepDeliveriesCount = 0;
+          for (let i = 0; i < stepDeliveries.length; i++) {
+            const canCreate = await canCreateStepDelivery(orgConfig.organizationId);
+            if (!canCreate) {
+              console.warn(`Step delivery limit reached for organization: ${orgConfig.organizationId}. Created ${allowedStepDeliveriesCount}/${stepDeliveries.length} step deliveries.`);
+              break;
+            }
+            allowedStepDeliveriesCount++;
           }
         } catch (error) {
-          console.warn('Failed to increment step delivery count:', error);
+          console.warn('Step delivery limit check failed, creating all step deliveries:', error);
         }
+
+        // Save step deliveries to Firestore (only allowed count)
+        const batch = db.batch();
+
+        for (let i = 0; i < allowedStepDeliveriesCount; i++) {
+          const docRef = db.collection('step_deliveries').doc();
+          batch.set(docRef, stepDeliveries[i]);
+        }
+
+        await batch.commit();
+
+        // Increment step delivery count for subscription tracking
+        if (allowedStepDeliveriesCount > 0) {
+          try {
+            for (let i = 0; i < allowedStepDeliveriesCount; i++) {
+              await incrementStepDeliveryCount(orgConfig.organizationId);
+            }
+          } catch (error) {
+            console.warn('Failed to increment step delivery count:', error);
+          }
+
+          console.log(`Created ${allowedStepDeliveriesCount} step deliveries for organization: ${orgConfig.organizationId}`);
+        }
+      } else {
+        console.log(`Step delivery is disabled for organization: ${orgConfig.organizationId}. Skipping step delivery creation.`);
       }
 
       // Send completion message
