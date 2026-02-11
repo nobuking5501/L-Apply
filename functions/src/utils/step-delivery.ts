@@ -236,15 +236,29 @@ export async function skipAllStepDeliveriesForApplication(
   db: FirebaseFirestore.Firestore,
   applicationId: string
 ): Promise<void> {
-  const snapshot = await db
-    .collection('step_deliveries')
-    .where('applicationId', '==', applicationId)
-    .where('status', '==', 'pending')
-    .get();
+  // Get both 'pending' and 'sending' status to handle race conditions
+  const [pendingSnapshot, sendingSnapshot] = await Promise.all([
+    db
+      .collection('step_deliveries')
+      .where('applicationId', '==', applicationId)
+      .where('status', '==', 'pending')
+      .get(),
+    db
+      .collection('step_deliveries')
+      .where('applicationId', '==', applicationId)
+      .where('status', '==', 'sending')
+      .get(),
+  ]);
 
   const batch = db.batch();
 
-  snapshot.docs.forEach((doc) => {
+  // Skip all pending deliveries
+  pendingSnapshot.docs.forEach((doc) => {
+    batch.update(doc.ref, { status: 'skipped' });
+  });
+
+  // Skip all sending deliveries (race condition protection)
+  sendingSnapshot.docs.forEach((doc) => {
     batch.update(doc.ref, { status: 'skipped' });
   });
 

@@ -326,7 +326,46 @@ LINE Webhook イベントを処理します。
 
 5分ごとに実行され、pending リマインドを送信します。
 
+## 📚 ドキュメント索引
+
+プロジェクトに関する詳細なドキュメントは以下を参照してください：
+
+### 主要ドキュメント
+
+- **[SETUP.md](./SETUP.md)** - 初回セットアップガイド
+- **[ARCHITECTURE.md](./ARCHITECTURE.md)** - システムアーキテクチャ
+- **[DEVELOPMENT.md](./DEVELOPMENT.md)** - 開発環境のセットアップ
+- **[DEPLOYMENT_CHECKLIST.md](./DEPLOYMENT_CHECKLIST.md)** - 🚨 **デプロイ前チェックリスト**（デプロイ前に必ず確認）
+- **[CHANGELOG.md](./CHANGELOG.md)** - 変更履歴
+
+### トラブルシューティングガイド
+
+- **[STEP_DELIVERY_BUG_FIX_GUIDE.md](./STEP_DELIVERY_BUG_FIX_GUIDE.md)** - ⚠️ **重要** ステップ配信の意図しない自動作成バグの修正ガイド
+  - 問題の概要、根本原因、修正内容
+  - 確認方法、デプロイ方法、予防策
+  - トラブルシューティング手順
+
+- **[STEP_DELIVERY_CHECK_TOOL.md](./STEP_DELIVERY_CHECK_TOOL.md)** - Pending配信の確認・スキップツールの使い方
+
+### その他のガイド
+
+- **[LINE_SETUP_GUIDE.md](./LINE_SETUP_GUIDE.md)** - LINE連携の設定方法
+- **[PLAN_CHANGE_GUIDE.md](./PLAN_CHANGE_GUIDE.md)** - プラン変更ガイド
+- **[SECURITY_MIGRATION.md](./SECURITY_MIGRATION.md)** - セキュリティマイグレーション
+
+### Claude Code作業ルール
+
+- **[.claude-rules.md](./.claude-rules.md)** - Claude Codeでの作業ルールとベストプラクティス
+
+---
+
 ## トラブルシューティング
+
+### ⚠️ ステップ配信が意図せず作成される
+
+**→ [STEP_DELIVERY_BUG_FIX_GUIDE.md](./STEP_DELIVERY_BUG_FIX_GUIDE.md) を参照**
+
+この問題の完全な解決ガイドが記載されています。
 
 ### Functions デプロイエラー
 
@@ -339,6 +378,9 @@ cd functions
 npm run build
 npm test
 ```
+
+**注意:** `firebase deploy` コマンドがタイムアウトする場合は、Google Cloud Consoleから手動デプロイしてください。
+詳細は [.claude-rules.md](./.claude-rules.md) を参照。
 
 ### Webhook が動作しない
 

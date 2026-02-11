@@ -4,8 +4,10 @@ import { apply as applyFn } from './apply-prod';
 import { webhook as webhookFn } from './webhook-prod';
 import { remind as remindFn } from './remind-prod';
 import { deliverSteps as deliverStepsFn } from './deliver-steps-prod';
+import { checkPendingDeliveries as checkPendingDeliveriesFn } from './check-pending-deliveries';
 
 export const apply = applyFn;
 export const webhook = webhookFn;
 export const remind = remindFn;
 export const deliverSteps = deliverStepsFn;
+export const checkPendingDeliveries = checkPendingDeliveriesFn;
