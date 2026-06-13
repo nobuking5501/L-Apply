@@ -109,6 +109,10 @@ export interface EventSlot {
   currentCapacity: number;
 }
 
+export type ApplicationSource = 'line' | 'phone' | 'admin';
+
+export type ReminderStatus = 'none' | 'pending' | 'sent' | 'failed';
+
 export interface Application {
   id: string;
   organizationId: string;
@@ -127,6 +131,10 @@ export interface Application {
   // Common fields
   slotAt: any;
   createdAt: any;
+  // Source tracking (added for external API / phone applications)
+  source?: ApplicationSource;
+  // Future notification extensibility
+  reminderStatus?: ReminderStatus;
 }
 
 export interface StepDelivery {

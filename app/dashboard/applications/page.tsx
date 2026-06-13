@@ -7,13 +7,42 @@ import { useAuth } from '@/contexts/AuthContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Search, Download, Mail, Phone, Calendar, MapPin, AlertCircle } from 'lucide-react';
+import { Search, Download, Mail, Phone, Calendar, MapPin, AlertCircle, MessageCircle, PhoneCall, UserCog } from 'lucide-react';
 import Link from 'next/link';
 import type { Application, Event } from '@/types';
 
 interface LineUser {
   userId: string;
   displayName: string;
+}
+
+function SourceBadge({ source }: { source?: string }) {
+  if (source === 'phone') {
+    return (
+      <span className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-full bg-orange-100 text-orange-800">
+        <PhoneCall className="h-3 w-3" />
+        電話申込み
+      </span>
+    );
+  }
+  if (source === 'admin') {
+    return (
+      <span className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-full bg-gray-100 text-gray-700">
+        <UserCog className="h-3 w-3" />
+        管理者登録
+      </span>
+    );
+  }
+  // 'line' or undefined (legacy) — shown only when other sources are also present for contrast
+  if (source === 'line') {
+    return (
+      <span className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-full bg-green-100 text-green-800">
+        <MessageCircle className="h-3 w-3" />
+        LINE申込み
+      </span>
+    );
+  }
+  return null;
 }
 
 export default function ApplicationsPage() {
@@ -379,21 +408,24 @@ export default function ApplicationsPage() {
                           {displayEvent}
                         </p>
                       </div>
-                      <span
-                        className={`text-xs px-2 py-1 rounded-full ${
-                          isConfirmed
-                            ? 'bg-green-100 text-green-800'
+                      <div className="flex items-center gap-1.5 flex-shrink-0 ml-2">
+                        <SourceBadge source={(application as any).source} />
+                        <span
+                          className={`text-xs px-2 py-1 rounded-full ${
+                            isConfirmed
+                              ? 'bg-green-100 text-green-800'
+                              : isCancelled
+                              ? 'bg-red-100 text-red-800'
+                              : 'bg-yellow-100 text-yellow-800'
+                          }`}
+                        >
+                          {isConfirmed
+                            ? '確認済'
                             : isCancelled
-                            ? 'bg-red-100 text-red-800'
-                            : 'bg-yellow-100 text-yellow-800'
-                        }`}
-                      >
-                        {isConfirmed
-                          ? '確認済'
-                          : isCancelled
-                          ? 'キャンセル'
-                          : '保留中'}
-                      </span>
+                            ? 'キャンセル'
+                            : '保留中'}
+                        </span>
+                      </div>
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">

@@ -96,6 +96,10 @@ export interface LineUser {
   updatedAt: Timestamp;
 }
 
+export type ApplicationSource = 'line' | 'phone' | 'admin';
+
+export type ReminderStatus = 'none' | 'pending' | 'sent' | 'failed';
+
 export interface Application {
   id?: string;
   userId: string;
@@ -108,6 +112,13 @@ export interface Application {
   // Event management fields (optional for backward compatibility)
   eventId?: string;
   slotId?: string;
+  // Applicant info (phone applications)
+  name?: string;
+  phone?: string;
+  // Source tracking
+  source?: ApplicationSource;
+  // Future notification extensibility
+  reminderStatus?: ReminderStatus;
 }
 
 export interface Reminder {
