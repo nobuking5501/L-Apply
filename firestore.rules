@@ -41,6 +41,11 @@ service cloud.firestore {
       allow read, write: if false; // No client-side access
     }
 
+    // Slot application counters - Server-side only (via Admin SDK)
+    match /slot_application_counts/{counterId} {
+      allow read, write: if false; // No client-side access
+    }
+
     // Subscriptions - 自分の組織のsubscriptionを作成・読み書き可能
     match /subscriptions/{orgId} {
       allow read: if isSameOrganization(orgId) || isAdmin();
