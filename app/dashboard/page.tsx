@@ -1,13 +1,32 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { collection, query, where, getDocs, orderBy, limit, doc, getDoc } from 'firebase/firestore';
+import { collection, query, where, getDocs, orderBy, doc, getDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { useAuth } from '@/contexts/AuthContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Calendar, Users, Send, TrendingUp, AlertCircle } from 'lucide-react';
+import { Calendar, Users, TrendingUp, AlertCircle, MapPin, Clock, PhoneCall, MessageCircle } from 'lucide-react';
 import Link from 'next/link';
-import type { Event, Application, StepDelivery, Organization } from '@/types';
+import type { Event, Application, Organization } from '@/types';
+
+interface SlotStats {
+  slotId: string;
+  date: string;
+  time: string;
+  capacity: number;
+  appliedCount: number;
+  phoneCount: number;
+  lineCount: number;
+  availableCount: number;
+  isFull: boolean;
+}
+
+interface EventWithStats {
+  event: Event;
+  slots: SlotStats[];
+  totalApplied: number;
+  totalCapacity: number;
+}
 
 export default function DashboardPage() {
   const { userData, user } = useAuth();
@@ -15,15 +34,11 @@ export default function DashboardPage() {
   const [organization, setOrganization] = useState<Organization | null>(null);
   const [showLineSetupWarning, setShowLineSetupWarning] = useState(false);
   const [stats, setStats] = useState({
-    totalEvents: 0,
-    activeEvents: 0,
-    totalApplications: 0,
+    activeEventApplications: 0,
+    totalCapacity: 0,
     monthlyApplications: 0,
-    totalDeliveries: 0,
-    pendingDeliveries: 0,
   });
-  const [recentEvents, setRecentEvents] = useState<Event[]>([]);
-  const [recentApplications, setRecentApplications] = useState<Application[]>([]);
+  const [eventsWithStats, setEventsWithStats] = useState<EventWithStats[]>([]);
 
   useEffect(() => {
     if (!userData?.organizationId || !user) return;
@@ -32,113 +47,122 @@ export default function DashboardPage() {
       try {
         const orgId = userData.organizationId;
 
-        // Fetch organization data to check LINE setup
         const orgDoc = await getDoc(doc(db, 'organizations', orgId));
         if (orgDoc.exists()) {
           const orgData = orgDoc.data() as Organization;
           setOrganization(orgData);
 
-          // Check if LINE credentials are set up
           const hasLineSetup = !!(orgData.lineChannelId && orgData.liffId);
-
-          // デバッグログ
-          console.log('=== LINE Setup Debug ===');
-          console.log('Organization ID:', userData.organizationId);
-          console.log('lineChannelId:', orgData.lineChannelId);
-          console.log('liffId:', orgData.liffId);
-          console.log('hasLineSetup:', hasLineSetup);
-
-          // Initially set warning based on organization data
           let shouldShowWarning = !hasLineSetup;
-          console.log('Initial shouldShowWarning:', shouldShowWarning);
 
-          // Check secrets via API
-          if (user) {
-            try {
-              const idToken = await user.getIdToken();
-              const response = await fetch('/api/settings', {
-                method: 'GET',
-                headers: {
-                  'Authorization': `Bearer ${idToken}`,
-                },
-              });
-
-              if (response.ok) {
-                const data = await response.json();
-                const hasSecrets = data.secretsMetadata?.hasChannelSecret &&
-                                   data.secretsMetadata?.hasChannelAccessToken;
-
-                // Show warning if any LINE credential is missing
-                shouldShowWarning = !hasLineSetup || !hasSecrets;
-              }
-            } catch (error) {
-              console.error('Error checking LINE setup:', error);
+          try {
+            const idToken = await user.getIdToken();
+            const response = await fetch('/api/settings', {
+              method: 'GET',
+              headers: { 'Authorization': `Bearer ${idToken}` },
+            });
+            if (response.ok) {
+              const data = await response.json();
+              const hasSecrets = data.secretsMetadata?.hasChannelSecret &&
+                                 data.secretsMetadata?.hasChannelAccessToken;
+              shouldShowWarning = !hasLineSetup || !hasSecrets;
             }
+          } catch (error) {
+            console.error('Error checking LINE setup:', error);
           }
 
-          // Set the warning state (will be true if org data incomplete OR API check failed/returned incomplete)
-          console.log('Final shouldShowWarning:', shouldShowWarning);
-          console.log('======================');
           setShowLineSetupWarning(shouldShowWarning);
         }
 
-        // Fetch events
-        const eventsQuery = query(
-          collection(db, 'events'),
-          where('organizationId', '==', orgId)
-        );
-        const eventsSnapshot = await getDocs(eventsQuery);
+        const [eventsSnapshot, applicationsSnapshot] = await Promise.all([
+          getDocs(query(
+            collection(db, 'events'),
+            where('organizationId', '==', orgId),
+            where('isActive', '==', true)
+          )),
+          getDocs(query(
+            collection(db, 'applications'),
+            where('organizationId', '==', orgId),
+            orderBy('createdAt', 'desc')
+          )),
+        ]);
+
         const events = eventsSnapshot.docs.map((doc) => ({
           id: doc.id,
           ...doc.data(),
         })) as Event[];
 
-        const activeEvents = events.filter((e) => e.isActive);
-
-        // Fetch applications
-        const applicationsQuery = query(
-          collection(db, 'applications'),
-          where('organizationId', '==', orgId),
-          orderBy('createdAt', 'desc'),
-          limit(10)
-        );
-        const applicationsSnapshot = await getDocs(applicationsQuery);
         const applications = applicationsSnapshot.docs.map((doc) => ({
           id: doc.id,
           ...doc.data(),
         })) as Application[];
 
-        // Calculate monthly applications
-        const now = new Date();
-        const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-        const monthlyApps = applications.filter(
-          (app) => app.createdAt?.toDate() >= firstDayOfMonth
-        );
+        // スロットごとの申込数を集計（キャンセル除外）
+        const slotAppliedMap = new Map<string, { total: number; phone: number; line: number }>();
+        for (const app of applications) {
+          const isCanceled = app.status === 'canceled' || app.status === 'cancelled';
+          if (isCanceled || !app.slotId) continue;
 
-        // Fetch step deliveries
-        const deliveriesQuery = query(
-          collection(db, 'step_deliveries'),
-          where('organizationId', '==', orgId)
-        );
-        const deliveriesSnapshot = await getDocs(deliveriesQuery);
-        const deliveries = deliveriesSnapshot.docs.map((doc) => ({
-          id: doc.id,
-          ...doc.data(),
-        })) as StepDelivery[];
+          const current = slotAppliedMap.get(app.slotId) ?? { total: 0, phone: 0, line: 0 };
+          current.total += 1;
+          if ((app as any).source === 'phone') {
+            current.phone += 1;
+          } else {
+            current.line += 1;
+          }
+          slotAppliedMap.set(app.slotId, current);
+        }
 
-        const pendingDeliveries = deliveries.filter((d) => d.status === 'pending');
+        // イベントごとの統計を組み立て
+        const built: EventWithStats[] = events.map((event) => {
+          const slots: SlotStats[] = (event.slots || []).map((slot) => {
+            const counts = slotAppliedMap.get(slot.id) ?? { total: 0, phone: 0, line: 0 };
+            const capacity = slot.maxCapacity || 0;
+            return {
+              slotId: slot.id,
+              date: slot.date ?? '',
+              time: slot.time ?? '',
+              capacity,
+              appliedCount: counts.total,
+              phoneCount: counts.phone,
+              lineCount: counts.line,
+              availableCount: Math.max(0, capacity - counts.total),
+              isFull: capacity > 0 && counts.total >= capacity,
+            };
+          });
 
-        setStats({
-          totalEvents: events.length,
-          activeEvents: activeEvents.length,
-          totalApplications: applications.length,
-          monthlyApplications: monthlyApps.length,
-          totalDeliveries: deliveries.length,
-          pendingDeliveries: pendingDeliveries.length,
+          const totalApplied = slots.reduce((s, sl) => s + sl.appliedCount, 0);
+          const totalCapacity = slots.reduce((s, sl) => s + sl.capacity, 0);
+
+          return { event, slots, totalApplied, totalCapacity };
         });
 
-        setRecentEvents(activeEvents.slice(0, 5));
-        setRecentApplications(applications.slice(0, 5));
+        setEventsWithStats(built);
+
+        // サマリー統計
+        const now = new Date();
+        const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+        const activeEventIds = new Set(events.map((e) => e.id));
+
+        const activeEventApps = applications.filter(
+          (app) =>
+            app.eventId &&
+            activeEventIds.has(app.eventId) &&
+            app.status !== 'cancelled' &&
+            app.status !== 'canceled'
+        );
+
+        const monthlyApps = applications.filter(
+          (app) => app.createdAt?.toDate?.() >= firstDayOfMonth
+        );
+
+        const totalCapacity = built.reduce((s, e) => s + e.totalCapacity, 0);
+
+        setStats({
+          activeEventApplications: activeEventApps.length,
+          totalCapacity,
+          monthlyApplications: monthlyApps.length,
+        });
       } catch (error) {
         console.error('Error fetching dashboard data:', error);
       } finally {
@@ -159,40 +183,6 @@ export default function DashboardPage() {
       </div>
     );
   }
-
-  const statCards = [
-    {
-      title: 'アクティブイベント',
-      value: stats.activeEvents,
-      total: stats.totalEvents,
-      icon: Calendar,
-      color: 'text-blue-600',
-      bgColor: 'bg-blue-100',
-    },
-    {
-      title: '今月の申込',
-      value: stats.monthlyApplications,
-      total: stats.totalApplications,
-      icon: Users,
-      color: 'text-green-600',
-      bgColor: 'bg-green-100',
-    },
-    {
-      title: '配信待ち',
-      value: stats.pendingDeliveries,
-      total: stats.totalDeliveries,
-      icon: Send,
-      color: 'text-orange-600',
-      bgColor: 'bg-orange-100',
-    },
-    {
-      title: '総申込数',
-      value: stats.totalApplications,
-      icon: TrendingUp,
-      color: 'text-purple-600',
-      bgColor: 'bg-purple-100',
-    },
-  ];
 
   return (
     <div className="relative space-y-8">
@@ -226,123 +216,155 @@ export default function DashboardPage() {
       )}
 
       {/* Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        {statCards.map((stat) => {
-          const Icon = stat.icon;
-          return (
-            <Card key={stat.title}>
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <Card>
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-600">公開中イベントの申込者数</p>
+                <div className="flex items-baseline mt-2 gap-1">
+                  <p className="text-3xl font-bold text-gray-900">{stats.activeEventApplications}</p>
+                  <p className="text-lg text-gray-400">/ {stats.totalCapacity}</p>
+                </div>
+              </div>
+              <div className="bg-blue-100 p-3 rounded-lg">
+                <Users className="h-6 w-6 text-blue-600" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-600">今月の総申込者数</p>
+                <p className="text-3xl font-bold text-gray-900 mt-2">
+                  {stats.monthlyApplications}
+                </p>
+              </div>
+              <div className="bg-green-100 p-3 rounded-lg">
+                <TrendingUp className="h-6 w-6 text-green-600" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* イベント別空き状況 */}
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+            <Calendar className="h-5 w-5 text-blue-600" />
+            公開中イベントの空き状況
+            <span className="text-sm font-normal text-gray-500">({eventsWithStats.length}件)</span>
+          </h3>
+          <Link href="/dashboard/applications" className="text-sm text-blue-600 hover:underline">
+            申込者一覧 →
+          </Link>
+        </div>
+
+        {eventsWithStats.length === 0 ? (
+          <Card>
+            <CardContent className="py-10 text-center">
+              <p className="text-sm text-gray-500">公開中のイベントがありません</p>
+              <Link
+                href="/dashboard/events"
+                className="inline-block mt-3 text-sm text-blue-600 hover:underline"
+              >
+                イベントを作成する →
+              </Link>
+            </CardContent>
+          </Card>
+        ) : (
+          eventsWithStats.map(({ event, slots, totalApplied, totalCapacity }) => (
+            <Card key={event.id}>
+              <CardHeader className="pb-3">
+                <div className="flex items-start justify-between gap-2">
                   <div>
-                    <p className="text-sm font-medium text-gray-600">{stat.title}</p>
-                    <div className="flex items-baseline mt-2">
-                      <p className="text-3xl font-bold text-gray-900">{stat.value}</p>
-                      {stat.total !== undefined && (
-                        <p className="ml-2 text-sm text-gray-500">/ {stat.total}</p>
-                      )}
-                    </div>
+                    <CardTitle className="text-base">{event.title}</CardTitle>
+                    {event.location && (
+                      <p className="text-xs text-gray-500 mt-1 flex items-center gap-1">
+                        <MapPin className="h-3 w-3" />
+                        {event.location}
+                      </p>
+                    )}
                   </div>
-                  <div className={`${stat.bgColor} p-3 rounded-lg`}>
-                    <Icon className={`h-6 w-6 ${stat.color}`} />
+                  <div className="text-right flex-shrink-0">
+                    <p className="text-sm font-bold text-gray-900">
+                      {totalApplied}
+                      <span className="text-gray-400 font-normal"> / {totalCapacity}名</span>
+                    </p>
+                    <p className="text-xs text-gray-500">合計申込 / 定員</p>
                   </div>
                 </div>
+              </CardHeader>
+
+              <CardContent className="pt-0 space-y-3">
+                {slots.length === 0 ? (
+                  <p className="text-xs text-gray-400">日程が設定されていません</p>
+                ) : (
+                  slots.map((slot) => {
+                    const pct = slot.capacity > 0
+                      ? Math.min(100, Math.round((slot.appliedCount / slot.capacity) * 100))
+                      : 0;
+                    const barColor =
+                      pct >= 100 ? 'bg-red-500' :
+                      pct >= 80  ? 'bg-orange-400' :
+                      'bg-blue-500';
+
+                    return (
+                      <div key={slot.slotId} className="border rounded-lg p-3 bg-gray-50">
+                        {/* 日時・残席ヘッダー */}
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="flex items-center gap-2 text-sm font-medium text-gray-800">
+                            <Clock className="h-3.5 w-3.5 text-gray-400" />
+                            {slot.date} {slot.time}
+                          </div>
+                          <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
+                            slot.isFull
+                              ? 'bg-red-100 text-red-700'
+                              : slot.availableCount <= 2
+                              ? 'bg-orange-100 text-orange-700'
+                              : 'bg-green-100 text-green-700'
+                          }`}>
+                            {slot.isFull ? '満席' : `残り ${slot.availableCount} 名`}
+                          </span>
+                        </div>
+
+                        {/* プログレスバー */}
+                        <div className="w-full bg-gray-200 rounded-full h-2 mb-2">
+                          <div
+                            className={`${barColor} h-2 rounded-full transition-all`}
+                            style={{ width: `${pct}%` }}
+                          />
+                        </div>
+
+                        {/* 申込数内訳 */}
+                        <div className="flex items-center justify-between text-xs text-gray-500">
+                          <div className="flex items-center gap-3">
+                            <span className="flex items-center gap-1">
+                              <MessageCircle className="h-3 w-3 text-green-600" />
+                              LINE {slot.lineCount}名
+                            </span>
+                            <span className="flex items-center gap-1">
+                              <PhoneCall className="h-3 w-3 text-orange-500" />
+                              電話 {slot.phoneCount}名
+                            </span>
+                          </div>
+                          <span className="text-gray-600 font-medium">
+                            {slot.appliedCount} / {slot.capacity}名
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
               </CardContent>
             </Card>
-          );
-        })}
+          ))
+        )}
       </div>
-
-      {/* Recent Activity */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Recent Events */}
-        <Card>
-          <CardHeader>
-            <CardTitle>最近のイベント</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {recentEvents.length === 0 ? (
-              <p className="text-sm text-gray-500 text-center py-8">
-                イベントがありません
-              </p>
-            ) : (
-              <div className="space-y-4">
-                {recentEvents.map((event) => (
-                  <div key={event.id} className="flex items-start justify-between">
-                    <div className="flex-1">
-                      <h4 className="text-sm font-medium text-gray-900">{event.title}</h4>
-                      <p className="text-xs text-gray-500 mt-1">{event.location}</p>
-                    </div>
-                    <span
-                      className={`text-xs px-2 py-1 rounded-full ${
-                        event.isActive
-                          ? 'bg-green-100 text-green-800'
-                          : 'bg-gray-100 text-gray-800'
-                      }`}
-                    >
-                      {event.isActive ? 'アクティブ' : '非アクティブ'}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Recent Applications */}
-        <Card>
-          <CardHeader>
-            <CardTitle>最近の申込</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {recentApplications.length === 0 ? (
-              <p className="text-sm text-gray-500 text-center py-8">
-                申込がありません
-              </p>
-            ) : (
-              <div className="space-y-4">
-                {recentApplications.map((application) => (
-                  <div key={application.id} className="flex items-start justify-between">
-                    <div className="flex-1">
-                      <h4 className="text-sm font-medium text-gray-900">
-                        {application.name}
-                      </h4>
-                      <p className="text-xs text-gray-500 mt-1">{application.email}</p>
-                    </div>
-                    <span
-                      className={`text-xs px-2 py-1 rounded-full ${
-                        application.status === 'confirmed'
-                          ? 'bg-green-100 text-green-800'
-                          : application.status === 'cancelled'
-                          ? 'bg-red-100 text-red-800'
-                          : 'bg-yellow-100 text-yellow-800'
-                      }`}
-                    >
-                      {application.status === 'confirmed'
-                        ? '確認済'
-                        : application.status === 'cancelled'
-                        ? 'キャンセル'
-                        : '保留中'}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Welcome Message */}
-      <Card className="bg-gradient-to-r from-blue-50 to-indigo-50 border-blue-200">
-        <CardContent className="p-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-2">
-            L-Applyへようこそ！
-          </h3>
-          <p className="text-sm text-gray-700">
-            このダッシュボードでは、イベントの管理、申込者の確認、ステップ配信の設定などが行えます。
-            左側のメニューから各機能にアクセスできます。
-          </p>
-        </CardContent>
-      </Card>
     </div>
   );
 }
