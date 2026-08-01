@@ -7,7 +7,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Search, Download, Mail, Phone, Calendar, MapPin, AlertCircle, MessageCircle, PhoneCall, UserCog } from 'lucide-react';
+import { Search, Download, Mail, Phone, Calendar, MapPin, AlertCircle, MessageCircle, PhoneCall, UserCog, ChevronDown, ChevronRight } from 'lucide-react';
 import Link from 'next/link';
 import type { Application, Event } from '@/types';
 
@@ -54,6 +54,7 @@ export default function ApplicationsPage() {
   const [lineUsers, setLineUsers] = useState<Map<string, string>>(new Map());
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState<string>('all');
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     if (!userData?.organizationId) return;
@@ -219,6 +220,59 @@ export default function ApplicationsPage() {
     return matchesSearch && matchesStatus;
   });
 
+  // Group applications by event + slot so it's clear who applied to which occurrence
+  interface ApplicationGroup {
+    key: string;
+    eventTitle: string;
+    slotAt: Date | null;
+    slotLabel: string;
+    applications: Application[];
+  }
+
+  const now = new Date();
+
+  const groupMap = new Map<string, ApplicationGroup>();
+  for (const application of filteredApplications) {
+    const slotDate = application.slotAt?.toDate ? application.slotAt.toDate() : null;
+    const eventTitle = application.eventId
+      ? getEventTitle(application.eventId)
+      : (application.plan || 'イベント/プラン不明');
+    const groupKey = `${application.eventId || application.plan || 'unknown'}__${slotDate ? slotDate.toISOString() : 'unset'}`;
+
+    if (!groupMap.has(groupKey)) {
+      groupMap.set(groupKey, {
+        key: groupKey,
+        eventTitle,
+        slotAt: slotDate,
+        slotLabel: slotDate ? slotDate.toLocaleString('ja-JP') : '日時未設定',
+        applications: [],
+      });
+    }
+    groupMap.get(groupKey)!.applications.push(application);
+  }
+
+  const allGroups = Array.from(groupMap.values());
+  // Upcoming events first (soonest first), then past/unset events (most recent first)
+  const upcomingGroups = allGroups
+    .filter((g) => g.slotAt !== null && g.slotAt.getTime() >= now.getTime())
+    .sort((a, b) => a.slotAt!.getTime() - b.slotAt!.getTime());
+  const pastGroups = allGroups
+    .filter((g) => g.slotAt === null || g.slotAt.getTime() < now.getTime())
+    .sort((a, b) => (b.slotAt?.getTime() ?? 0) - (a.slotAt?.getTime() ?? 0));
+  const applicationGroups = [...upcomingGroups, ...pastGroups];
+
+  const toggleGroup = (key: string) => {
+    setCollapsedGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) {
+        next.delete(key);
+      } else {
+        next.add(key);
+      }
+      return next;
+    });
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -358,104 +412,142 @@ export default function ApplicationsPage() {
         </CardContent>
       </Card>
 
-      {/* Applications List */}
+      {/* Applications List (grouped by event + occurrence) */}
       <Card>
-        <CardHeader>
+        <CardHeader className="flex flex-row items-center justify-between space-y-0">
           <CardTitle>
-            申込一覧 ({filteredApplications.length}件)
+            申込一覧 ({filteredApplications.length}件 / {applicationGroups.length}回)
           </CardTitle>
+          {applicationGroups.length > 0 && (
+            <div className="flex gap-2">
+              <Button variant="outline" size="sm" onClick={() => setCollapsedGroups(new Set())}>
+                すべて展開
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCollapsedGroups(new Set(applicationGroups.map((g) => g.key)))}
+              >
+                すべて折りたたむ
+              </Button>
+            </div>
+          )}
         </CardHeader>
         <CardContent>
-          {filteredApplications.length === 0 ? (
+          {applicationGroups.length === 0 ? (
             <p className="text-sm text-gray-500 text-center py-8">
               {searchTerm || filterStatus !== 'all'
                 ? '検索条件に一致する申込がありません'
                 : '申込がありません'}
             </p>
           ) : (
-            <div className="space-y-3">
-              {filteredApplications.map((application) => {
-                const slotDate = application.slotAt?.toDate
-                  ? application.slotAt.toDate().toLocaleString('ja-JP')
-                  : '未設定';
-                const createdDate = application.createdAt?.toDate
-                  ? application.createdAt.toDate().toLocaleString('ja-JP')
-                  : '未設定';
-
-                // Support both LINE and dashboard applications
-                const displayName = getDisplayName(application);
-                const displayEvent = application.eventId
-                  ? getEventTitle(application.eventId)
-                  : (application.plan || 'イベント/プラン不明');
-
-                const normalizedStatus = application.status === 'applied' ? 'pending' :
-                                       application.status === 'canceled' ? 'cancelled' :
-                                       application.status;
-                const isConfirmed = application.status === 'confirmed' || application.status === 'applied';
-                const isCancelled = application.status === 'cancelled' || application.status === 'canceled';
+            <div className="space-y-4">
+              {applicationGroups.map((group) => {
+                const isCollapsed = collapsedGroups.has(group.key);
+                const isPast = group.slotAt === null || group.slotAt.getTime() < now.getTime();
 
                 return (
-                  <div
-                    key={application.id}
-                    className="p-4 border rounded-lg hover:bg-gray-50 transition-colors"
-                  >
-                    <div className="flex items-start justify-between mb-3">
+                  <div key={group.key} className="border rounded-lg overflow-hidden">
+                    <button
+                      type="button"
+                      onClick={() => toggleGroup(group.key)}
+                      className="w-full flex items-center justify-between p-4 bg-gray-50 hover:bg-gray-100 transition-colors text-left"
+                    >
                       <div>
-                        <h4 className="text-base font-semibold text-gray-900">
-                          {displayName}
-                        </h4>
-                        <p className="text-sm text-gray-600 mt-1">
-                          {displayEvent}
+                        <div className="flex items-center gap-2">
+                          <h3 className="text-base font-semibold text-gray-900">
+                            {group.eventTitle}
+                          </h3>
+                          {isPast && (
+                            <span className="text-xs px-2 py-0.5 rounded-full bg-gray-200 text-gray-600">
+                              終了
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-sm text-gray-600 mt-1 flex items-center flex-wrap gap-x-3">
+                          <span className="flex items-center">
+                            <Calendar className="h-3.5 w-3.5 mr-1.5" />
+                            {group.slotLabel}
+                          </span>
+                          <span className="text-gray-500">{group.applications.length}名</span>
                         </p>
                       </div>
-                      <div className="flex items-center gap-1.5 flex-shrink-0 ml-2">
-                        <SourceBadge source={(application as any).source} />
-                        <span
-                          className={`text-xs px-2 py-1 rounded-full ${
-                            isConfirmed
-                              ? 'bg-green-100 text-green-800'
-                              : isCancelled
-                              ? 'bg-red-100 text-red-800'
-                              : 'bg-yellow-100 text-yellow-800'
-                          }`}
-                        >
-                          {isConfirmed
-                            ? '確認済'
-                            : isCancelled
-                            ? 'キャンセル'
-                            : '保留中'}
-                        </span>
-                      </div>
-                    </div>
+                      {isCollapsed ? (
+                        <ChevronRight className="h-5 w-5 text-gray-400 flex-shrink-0" />
+                      ) : (
+                        <ChevronDown className="h-5 w-5 text-gray-400 flex-shrink-0" />
+                      )}
+                    </button>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
-                      {application.email && (
-                        <div className="flex items-center text-gray-600">
-                          <Mail className="h-4 w-4 mr-2" />
-                          {application.email}
-                        </div>
-                      )}
-                      {application.phone && (
-                        <div className="flex items-center text-gray-600">
-                          <Phone className="h-4 w-4 mr-2" />
-                          {application.phone}
-                        </div>
-                      )}
-                      <div className="flex items-center text-gray-600">
-                        <Calendar className="h-4 w-4 mr-2" />
-                        開催日時: {slotDate}
+                    {!isCollapsed && (
+                      <div className="p-4 space-y-3 bg-white">
+                        {group.applications.map((application) => {
+                          const createdDate = application.createdAt?.toDate
+                            ? application.createdAt.toDate().toLocaleString('ja-JP')
+                            : '未設定';
+
+                          const displayName = getDisplayName(application);
+                          const isConfirmed = application.status === 'confirmed' || application.status === 'applied';
+                          const isCancelled = application.status === 'cancelled' || application.status === 'canceled';
+
+                          return (
+                            <div
+                              key={application.id}
+                              className="p-4 border rounded-lg hover:bg-gray-50 transition-colors"
+                            >
+                              <div className="flex items-start justify-between mb-3">
+                                <h4 className="text-base font-semibold text-gray-900">
+                                  {displayName}
+                                </h4>
+                                <div className="flex items-center gap-1.5 flex-shrink-0 ml-2">
+                                  <SourceBadge source={(application as any).source} />
+                                  <span
+                                    className={`text-xs px-2 py-1 rounded-full ${
+                                      isConfirmed
+                                        ? 'bg-green-100 text-green-800'
+                                        : isCancelled
+                                        ? 'bg-red-100 text-red-800'
+                                        : 'bg-yellow-100 text-yellow-800'
+                                    }`}
+                                  >
+                                    {isConfirmed
+                                      ? '確認済'
+                                      : isCancelled
+                                      ? 'キャンセル'
+                                      : '保留中'}
+                                  </span>
+                                </div>
+                              </div>
+
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
+                                {application.email && (
+                                  <div className="flex items-center text-gray-600">
+                                    <Mail className="h-4 w-4 mr-2" />
+                                    {application.email}
+                                  </div>
+                                )}
+                                {application.phone && (
+                                  <div className="flex items-center text-gray-600">
+                                    <Phone className="h-4 w-4 mr-2" />
+                                    {application.phone}
+                                  </div>
+                                )}
+                                <div className="flex items-center text-gray-600">
+                                  <Calendar className="h-4 w-4 mr-2" />
+                                  申込日時: {createdDate}
+                                </div>
+                                {application.notes && (
+                                  <div className="flex items-center text-gray-600 md:col-span-2">
+                                    <span className="font-medium mr-2">備考:</span>
+                                    {application.notes}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
                       </div>
-                      <div className="flex items-center text-gray-600">
-                        <Calendar className="h-4 w-4 mr-2" />
-                        申込日時: {createdDate}
-                      </div>
-                      {application.notes && (
-                        <div className="flex items-center text-gray-600 md:col-span-2">
-                          <span className="font-medium mr-2">備考:</span>
-                          {application.notes}
-                        </div>
-                      )}
-                    </div>
+                    )}
                   </div>
                 );
               })}
